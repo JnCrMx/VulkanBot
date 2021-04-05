@@ -32,9 +32,9 @@ public:
 
 	void onMessage(SleepyDiscord::Message message) override
 	{
-
 		if(message.startsWith("```glsl"))
 		{
+			sendTyping(message.channelID);
 			std::string code = message.content.substr(8, message.content.length() - 8 - 3);
 			auto [result, error] = backend.uploadShader(code);
 			if(result)
