@@ -1,0 +1,9 @@
+# CMake Build directory
+/build/
+
+# VSCodium Cache
+/.cache/
+
+# other external stuff (working on a better way to include it)
+src/external/
+include/external/
