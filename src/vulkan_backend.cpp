@@ -118,7 +118,7 @@ namespace vulkanbot
 
 			uint32_t memoryTypeIndex = findMemoryType(m_physicalDevice.getMemoryProperties(),
 				m_inputImageMemoryRequirements.memoryTypeBits,
-				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 			m_inputImageMemory = m_device->allocateMemoryUnique(vk::MemoryAllocateInfo(m_inputImageMemoryRequirements.size, memoryTypeIndex));
 
 			m_device->bindBufferMemory(m_inputImageBuffer.get(), m_inputImageMemory.get(), 0);
@@ -131,7 +131,7 @@ namespace vulkanbot
 
 			uint32_t memoryTypeIndex = findMemoryType(m_physicalDevice.getMemoryProperties(),
 				m_outputImageMemoryRequirements.memoryTypeBits,
-				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent | vk::MemoryPropertyFlagBits::eHostCached);
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
 			m_outputImageMemory = m_device->allocateMemoryUnique(vk::MemoryAllocateInfo(m_outputImageMemoryRequirements.size, memoryTypeIndex));
 
 			m_device->bindBufferMemory(m_outputImageBuffer.get(), m_outputImageMemory.get(), 0);
