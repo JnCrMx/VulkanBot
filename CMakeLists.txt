@@ -9,13 +9,13 @@ find_package(Vulkan REQUIRED)
 find_package(glm REQUIRED)
 find_package(CURL REQUIRED)
 
-file(GLOB_RECURSE sources src/*.cpp src/*.h)
+file(GLOB_RECURSE sources src/*.cpp src/*.h external/lodepng/lodepng.cpp)
 file(GLOB_RECURSE shaders shaders/*.vert shaders/*.frag shaders/*.comp)
 
 add_executable(vulkan_bot ${sources})
 
 target_include_directories(vulkan_bot PUBLIC include/)
-target_include_directories(vulkan_bot PUBLIC include/external)
+target_include_directories(vulkan_bot PUBLIC external/lodepng)
 target_include_directories(vulkan_bot PUBLIC ${CURL_INCLUDE_DIR})
 
 target_link_libraries(vulkan_bot PUBLIC ${Vulkan_LIBRARIES})

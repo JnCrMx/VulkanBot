@@ -4,3 +4,6 @@
 [submodule "external/sleepy-discord"]
 	path = external/sleepy-discord
 	url = https://github.com/yourWaifu/sleepy-discord
+[submodule "external/lodepng"]
+	path = external/lodepng
+	url = https://github.com/lvandeve/lodepng
