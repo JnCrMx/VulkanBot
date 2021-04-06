@@ -7,3 +7,6 @@
 [submodule "external/lodepng"]
 	path = external/lodepng
 	url = https://github.com/lvandeve/lodepng
+[submodule "external/glslang"]
+	path = external/glslang
+	url = https://github.com/KhronosGroup/glslang

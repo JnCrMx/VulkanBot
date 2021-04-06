@@ -11,10 +11,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <glslang/Include/ResourceLimits.h>
-#include <glslang/MachineIndependent/Versions.h>
-#include <glslang/Public/ShaderLang.h>
-#include <glslang/SPIRV/GlslangToSpv.h>
+#include <ResourceLimits.h>
+#include <ShaderLang.h>
+#include <GlslangToSpv.h>
 
 namespace vulkanbot
 {
