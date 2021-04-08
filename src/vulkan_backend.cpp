@@ -393,6 +393,28 @@ namespace vulkanbot
 		return {true, ""};
 	}
 
+	std::tuple<bool, std::string> VulkanBackend::uploadShaders(const std::string vertexCode, const std::string fragmentCode)
+	{
+		std::vector<unsigned int> vertexBin;
+		std::vector<unsigned int> fragmentBin;
+
+		glslang::InitializeProcess();
+		auto [vResult, vMessage] = compileShader(EShLangVertex, vertexCode, vertexBin);
+		auto [fResult, fMessage] = compileShader(EShLangFragment, fragmentCode, fragmentBin);
+		glslang::FinalizeProcess();
+
+		if(!vResult)
+			return {vResult, "vertex: "+vMessage};
+		if(!fResult)
+			return {fResult, "fragment: "+fMessage};
+
+		vk::UniqueShaderModule vertexShader = createShader(vertexBin);
+		vk::UniqueShaderModule fragmentShader = createShader(fragmentBin);
+
+		uploadShader(vertexShader, fragmentShader);
+		return {true, ""};
+	}
+
 	void VulkanBackend::uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader)
 	{
 		if(m_pipeline)
