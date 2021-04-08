@@ -10,3 +10,6 @@
 [submodule "external/glslang"]
 	path = external/glslang
 	url = https://github.com/KhronosGroup/glslang
+[submodule "external/gif-h"]
+	path = external/gif-h
+	url = https://github.com/charlietangora/gif-h

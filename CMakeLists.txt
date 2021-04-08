@@ -16,6 +16,7 @@ add_executable(vulkan_bot ${sources})
 
 target_include_directories(vulkan_bot PUBLIC include/)
 target_include_directories(vulkan_bot PUBLIC external/lodepng)
+target_include_directories(vulkan_bot PUBLIC external/gif-h)
 target_include_directories(vulkan_bot PUBLIC ${CURL_INCLUDE_DIR})
 
 target_link_libraries(vulkan_bot PUBLIC ${Vulkan_LIBRARIES})

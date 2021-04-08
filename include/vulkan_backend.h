@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bits/stdint-uintn.h>
+#include <functional>
 #include <tuple>
 #include <memory>
 #include <vector>
@@ -19,22 +20,25 @@ namespace vulkanbot
 {
 	struct Vertex {
 		glm::vec3 pos;
-		glm::vec3 color;
 
 		static vk::VertexInputBindingDescription getBindingDescription()
 		{
 			return vk::VertexInputBindingDescription(0, sizeof(Vertex), vk::VertexInputRate::eVertex);
 		}
 
-		static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions()
+		static std::array<vk::VertexInputAttributeDescription, 1> getAttributeDescriptions()
 		{
-			std::array<vk::VertexInputAttributeDescription, 2> attributeDescriptions{
-				vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, pos)),
-				vk::VertexInputAttributeDescription(1, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, color))
+			std::array<vk::VertexInputAttributeDescription, 1> attributeDescriptions{
+				vk::VertexInputAttributeDescription(0, 0, vk::Format::eR32G32B32A32Sfloat, offsetof(Vertex, pos))
 			};
 
 			return attributeDescriptions;
 		}
+	};
+
+	struct UniformBufferObject {
+		float time;
+		float random;
 	};
 
 	struct ImageData {
@@ -57,10 +61,11 @@ namespace vulkanbot
 			~VulkanBackend();
 
 			void initVulkan(int width, int height);
-			void uploadShader(const std::vector<unsigned int>& code);
-			std::tuple<bool, std::string> uploadShader(const std::string glslCode);
+			void uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment);
+			std::tuple<bool, std::string> uploadShader(const std::string glslCode, bool vertex);
 
 			void readImage(const std::vector<unsigned char>& data);
+			void updateUniformObject(std::function<void(UniformBufferObject*)> updater);
 
 			template<typename ImageProvider>
 			void loadImage(ImageProvider const & provider)
@@ -80,7 +85,7 @@ namespace vulkanbot
 
 			vk::UniqueShaderModule createShader(const std::vector<unsigned int>& code);
 			vk::UniqueShaderModule createShader(const std::vector<char>& code);
-			vk::UniquePipeline createPipeline(const std::vector<unsigned int>& code);
+			vk::UniquePipeline createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment);
 
 			vk::UniqueInstance m_instance;
 			vk::PhysicalDevice m_physicalDevice;
@@ -98,6 +103,15 @@ namespace vulkanbot
 			vk::UniqueBuffer m_outputImageBuffer;
 			vk::MemoryRequirements m_outputImageMemoryRequirements;
 			vk::UniqueDeviceMemory m_outputImageMemory;
+
+			vk::UniqueBuffer m_vertexBuffer;
+			vk::UniqueDeviceMemory m_vertexMemory;
+			vk::UniqueBuffer m_indexBuffer;
+			vk::UniqueDeviceMemory m_indexMemory;
+			int m_indexCount;
+
+			vk::UniqueBuffer m_uniformBuffer;
+			vk::UniqueDeviceMemory m_uniformMemory;
 
 			ImageData* m_texture;
 			vk::UniqueSampler m_textureSampler;
