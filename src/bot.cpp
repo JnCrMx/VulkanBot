@@ -35,6 +35,8 @@ public:
 		m_maxFrames = config["maxFrames"];
 		m_defaultFrames = config["defaultFrames"];
 		m_defaultFrameDelay = config["defaultFrameDelay"];
+		m_defaultStart = config["defaultStart"];
+		m_defaultEnd = config["defaultEnd"];
 
 		e2 = std::mt19937(rd());
 		dist = std::uniform_real_distribution<>(0.0, 1.0);
@@ -134,14 +136,17 @@ public:
 
 				if(animated != std::string::npos)
 				{
-
 					int frames = m_defaultFrames;
 					int frameDelay = m_defaultFrameDelay;
+					float tStart = m_defaultStart;
+					float tEnd = m_defaultEnd;
 					try
 					{
 						std::istringstream stringstream(message.content.substr(animated+9));
 						stringstream >> frames;
 						stringstream >> frameDelay;
+						stringstream >> tStart;
+						stringstream >> tEnd;
 					}
 					catch(const std::out_of_range& ex) {}
 					if(frames > m_maxFrames)
@@ -153,8 +158,8 @@ public:
 					GifBegin(&g, "/tmp/render.gif", m_width, m_height, frameDelay);
 					for(int i=0; i<frames; i++)
 					{
-						backend.updateUniformObject([this, frames, i](UniformBufferObject* ubo){
-							ubo->time = (1.0f/frames)*i;
+						backend.updateUniformObject([this, frames, tStart, tEnd, i](UniformBufferObject* ubo){
+							ubo->time = ((tEnd-tStart)/frames)*i + tStart;
 							ubo->random = dist(e2);
 						});
 
@@ -207,6 +212,9 @@ private:
 
 	int m_defaultFrames;
 	int m_defaultFrameDelay;
+
+	float m_defaultStart;
+	float m_defaultEnd;
 
 	int m_maxFrames;
 };
