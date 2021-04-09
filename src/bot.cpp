@@ -2,12 +2,15 @@
 #include "vulkan_backend.h"
 #include <bits/stdint-uintn.h>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <ratio>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 #include <optional>
+#include <csignal>
 #include <vulkan/vulkan.hpp>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
@@ -47,12 +50,15 @@ public:
 
 	void onMessage(SleepyDiscord::Message message) override
 	{
-		if(message.startsWith("```glsl") || message.startsWith("vert```glsl") || message.startsWith("frag```glsl"))
+		if(message.startsWith("```glsl") || message.startsWith("vert```glsl") || message.startsWith("frag```glsl") ||
+			message.startsWith("file``") || message.startsWith("vertfile``") || message.startsWith("fragfile``"))
 		{
 			sendTyping(message.channelID);
 
 			std::optional<std::string> vertexShader;
 			std::optional<std::string> fragmentShader;
+			std::optional<std::string> vertexPath;
+			std::optional<std::string> fragmentPath;
 
 			std::string::size_type end = 0;
 			auto vertexStart = message.content.find("vert```glsl");
@@ -95,26 +101,55 @@ public:
 				}
 			}
 
+			if(!vertexShader.has_value())
+			{
+				vertexStart = message.content.find("vertfile``");
+				if(vertexStart != std::string::npos)
+				{
+					vertexStart += 10;
+					auto vertexEnd = message.content.find("``", vertexStart);
+					if(vertexEnd != std::string::npos)
+					{
+						vertexPath = message.content.substr(vertexStart, vertexEnd - vertexStart);
+						if(vertexEnd > end)
+							end = vertexEnd + 3;
+					}
+				}
+			}
+			if(!fragmentShader.has_value())
+			{
+				fragmentStart = message.content.find("fragfile``");
+				if(fragmentStart != std::string::npos)
+				{
+					fragmentStart += 10;
+					auto fragmentEnd = message.content.find("``", fragmentStart);
+					if(fragmentEnd != std::string::npos)
+					{
+						fragmentPath = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
+						if(fragmentEnd > end)
+							end = fragmentEnd + 3;
+					}
+				}
+				if(!fragmentPath.has_value())
+				{
+					fragmentStart = message.content.find("file``");
+					if(fragmentStart != std::string::npos && (fragmentStart += 6) != vertexStart)
+					{
+						auto fragmentEnd = message.content.find("``", fragmentStart);
+						if(fragmentEnd != std::string::npos)
+						{
+							fragmentPath = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
+							if(fragmentEnd > end)
+								end = fragmentEnd + 3;
+						}
+					}
+				}
+			}
+
 			auto animated = message.content.find("animated", end);
 
-			std::tuple<bool, std::string> res;
-			if(fragmentShader.has_value() && vertexShader.has_value())
-			{
-				res = backend.uploadShaders(*vertexShader, *fragmentShader);
-			}
-			else if(fragmentShader.has_value())
-			{
-				res = backend.uploadShader(*fragmentShader, false);
-			}
-			else if(vertexShader.has_value())
-			{
-				res = backend.uploadShader(*vertexShader, true);
-			}
-			else
-			{
-				res = {false, "No shaders"};
-			}
-			auto [result, error] = res;
+			auto [result, error] = backend.uploadShaderMix(vertexShader.value_or(vertexPath.value_or("base")), !vertexShader.has_value(), 
+				fragmentShader.value_or(fragmentPath.value_or("base")), !fragmentShader.has_value());
 
 			if(result)
 			{
@@ -173,6 +208,11 @@ public:
 
 							delete [] dataCopy;
 						});
+
+						struct stat64 stat;
+						stat64("/tmp/render.gif", &stat);
+						if(stat.st_size > 7000000)
+							break;
 					}
 					GifEnd(&g);
 					auto t2 = std::chrono::high_resolution_clock::now();
@@ -219,15 +259,26 @@ private:
 	int m_maxFrames;
 };
 
+static MyClientClass* client;
+
+void INThandler(int sig)
+{
+	if(client)
+		delete client;
+	exit(0);
+}
+
 int main()
 {
+	std::signal(SIGINT, INThandler);
+
 	std::ifstream config("config.json");
 	nlohmann::json j;
 	config >> j;
 
-	MyClientClass client(j["token"], SleepyDiscord::USER_CONTROLED_THREADS);
-	client.initVulkan(j);
-	client.run();
+	client = new MyClientClass(j["token"], SleepyDiscord::USER_CONTROLED_THREADS);
+	client->initVulkan(j);
+	client->run();
 
 	return 0;
 }

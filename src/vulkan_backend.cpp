@@ -374,42 +374,68 @@ namespace vulkanbot
 		return {true, ""};
 	}
 
-	std::tuple<bool, std::string> VulkanBackend::uploadShader(std::string glslCode, bool vertex)
-	{
-		std::vector<unsigned int> shaderCode;
-		glslang::InitializeProcess();
-		auto [result, message] = compileShader(vertex ? EShLangVertex : EShLangFragment, glslCode, shaderCode);
-		glslang::FinalizeProcess();
-
-		if(!result)
-		{
-			return {result, message};
-		}
-
-		vk::UniqueShaderModule baseShader = createShader(readFile(vertex ? "shaders/base.frag.spv" : "shaders/base.vert.spv"));
-		vk::UniqueShaderModule customShader = createShader(shaderCode);
-
-		uploadShader(vertex ? customShader : baseShader, vertex ? baseShader : customShader);
-		return {true, ""};
-	}
-
-	std::tuple<bool, std::string> VulkanBackend::uploadShaders(const std::string vertexCode, const std::string fragmentCode)
+	std::tuple<bool, std::string> VulkanBackend::uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile)
 	{
 		std::vector<unsigned int> vertexBin;
 		std::vector<unsigned int> fragmentBin;
 
+		std::tuple<bool, std::string> vertexResult = {true, ""};
+		std::tuple<bool, std::string> fragmentResult = {true, ""};
+
+		vk::UniqueShaderModule vertexShader;
+		vk::UniqueShaderModule fragmentShader;
+
 		glslang::InitializeProcess();
-		auto [vResult, vMessage] = compileShader(EShLangVertex, vertexCode, vertexBin);
-		auto [fResult, fMessage] = compileShader(EShLangFragment, fragmentCode, fragmentBin);
+		if(vertexFile)
+		{
+			if(vertex.find("/") != std::string::npos)
+				vertexResult = {false, "shader name contains /"};
+			else
+			{
+				try
+				{
+					vertexShader = createShader(readFile("shaders/"+vertex+".vert.spv"));
+				}
+				catch(const std::runtime_error& err)
+				{
+					vertexResult = {false, err.what()};
+				}
+			}
+		}
+		else
+		{
+			vertexResult = compileShader(EShLangVertex, vertex, vertexBin);
+			if(std::get<0>(vertexResult))
+				vertexShader = createShader(vertexBin);
+		}
+		if(fragmentFile)
+		{
+			if(fragment.find("/") != std::string::npos)
+				fragmentResult = {false, "shader name contains /"};
+			else
+			{
+				try
+				{
+					fragmentShader = createShader(readFile("shaders/"+fragment+".frag.spv"));
+				}
+				catch(const std::runtime_error& err)
+				{
+					fragmentResult = {false, err.what()};
+				}
+			}
+		}
+		else
+		{
+			fragmentResult = compileShader(EShLangFragment, fragment, fragmentBin);
+			if(std::get<0>(fragmentResult))
+				fragmentShader = createShader(fragmentBin);
+		}
 		glslang::FinalizeProcess();
 
-		if(!vResult)
-			return {vResult, "vertex: "+vMessage};
-		if(!fResult)
-			return {fResult, "fragment: "+fMessage};
-
-		vk::UniqueShaderModule vertexShader = createShader(vertexBin);
-		vk::UniqueShaderModule fragmentShader = createShader(fragmentBin);
+		if(!std::get<0>(vertexResult))
+			return {std::get<0>(vertexResult), "vertex: "+std::get<1>(vertexResult)};
+		if(!std::get<0>(fragmentResult))
+			return {std::get<0>(fragmentResult), "fragment: "+std::get<1>(fragmentResult)};
 
 		uploadShader(vertexShader, fragmentShader);
 		return {true, ""};
@@ -417,8 +443,6 @@ namespace vulkanbot
 
 	void VulkanBackend::uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader)
 	{
-		if(m_pipeline)
-			m_pipeline.release();
 		m_pipeline = createPipeline(vertexShader, fragmentShader);
 
 		m_commandBuffer->reset();

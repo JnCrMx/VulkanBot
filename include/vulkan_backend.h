@@ -63,8 +63,7 @@ namespace vulkanbot
 			void initVulkan(int width, int height);
 			void uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment);
 
-			std::tuple<bool, std::string> uploadShader(const std::string glslCode, bool vertex);
-			std::tuple<bool, std::string> uploadShaders(const std::string vertexCode, const std::string fragmentCode);
+			std::tuple<bool, std::string> uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile);
 
 			void readImage(const std::vector<unsigned char>& data);
 			void updateUniformObject(std::function<void(UniformBufferObject*)> updater);
