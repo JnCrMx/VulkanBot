@@ -147,9 +147,12 @@ public:
 			}
 
 			auto animated = message.content.find("animated", end);
+			bool nocull = message.content.find("nocull", end) != std::string::npos;
+			bool nodepth = message.content.find("nodepth", end) != std::string::npos;
 
-			auto [result, error] = backend.uploadShaderMix(vertexShader.value_or(vertexPath.value_or("base")), !vertexShader.has_value(), 
-				fragmentShader.value_or(fragmentPath.value_or("base")), !fragmentShader.has_value());
+			auto [result, error] = backend.uploadShaderMix(vertexShader.value_or(vertexPath.value_or("base")), !vertexShader.has_value(),
+				fragmentShader.value_or(fragmentPath.value_or("base")), !fragmentShader.has_value(),
+				nocull ? vk::CullModeFlagBits::eNone : vk::CullModeFlagBits::eFront, !nodepth);
 
 			if(result)
 			{
@@ -163,7 +166,7 @@ public:
 				curl_easy_setopt(curl, CURLOPT_WRITEDATA, &png);
 				curl_easy_perform(curl);
     			curl_easy_cleanup(curl);
-				
+
 				std::vector<unsigned char> image;
 				unsigned int w, h;
 				lodepng::decode(image, w, h, png);

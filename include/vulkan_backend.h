@@ -62,9 +62,11 @@ namespace vulkanbot
 			~VulkanBackend();
 
 			void initVulkan(int width, int height);
-			void uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment);
+			void uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment,
+				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
 
-			std::tuple<bool, std::string> uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile);
+			std::tuple<bool, std::string> uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile,
+				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
 
 			void readImage(const std::vector<unsigned char>& data);
 			void updateUniformObject(std::function<void(UniformBufferObject*)> updater);
@@ -87,7 +89,8 @@ namespace vulkanbot
 
 			vk::UniqueShaderModule createShader(const std::vector<unsigned int>& code);
 			vk::UniqueShaderModule createShader(const std::vector<char>& code);
-			vk::UniquePipeline createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment);
+			vk::UniquePipeline createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment,
+				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
 
 			vk::UniqueInstance m_instance;
 			vk::PhysicalDevice m_physicalDevice;

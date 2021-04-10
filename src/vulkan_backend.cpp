@@ -311,7 +311,8 @@ namespace vulkanbot
 		return m_device->createShaderModuleUnique(vk::ShaderModuleCreateInfo({}, code.size(), reinterpret_cast<const uint32_t*>(code.data())));
 	}
 
-	vk::UniquePipeline VulkanBackend::createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader)
+	vk::UniquePipeline VulkanBackend::createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader,
+		vk::CullModeFlags cullMode, bool depth)
 	{
 		//vk::UniqueShaderModule vertexShader = createShader(readFile("shaders/base.vert.spv"));
 		//vk::UniqueShaderModule fragmentShader = createShader(code);
@@ -334,7 +335,7 @@ namespace vulkanbot
 		vk::PipelineViewportStateCreateInfo viewportState({}, 1, &viewport, 1, &scissor);
 
 		vk::PipelineRasterizationStateCreateInfo rasterizer({}, false, false, vk::PolygonMode::eFill,
-			vk::CullModeFlagBits::eFront, vk::FrontFace::eCounterClockwise, false, 0.0f, 0.0f, 0.0f, 1.0f);
+			cullMode, vk::FrontFace::eCounterClockwise, false, 0.0f, 0.0f, 0.0f, 1.0f);
 		vk::PipelineMultisampleStateCreateInfo multisampling({}, vk::SampleCountFlagBits::e1);
 		vk::PipelineColorBlendAttachmentState colorBlendAttachment(false,
 			vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd,
@@ -342,7 +343,7 @@ namespace vulkanbot
 			vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 		vk::PipelineColorBlendStateCreateInfo colorBlending({}, false, vk::LogicOp::eNoOp, colorBlendAttachment, {{1.0f, 1.0f, 1.0f, 1.0f}});
 
-		vk::PipelineDepthStencilStateCreateInfo depthStencil({}, true, true, vk::CompareOp::eLessOrEqual, false);
+		vk::PipelineDepthStencilStateCreateInfo depthStencil({}, depth, depth, vk::CompareOp::eLessOrEqual, false);
 
 		vk::GraphicsPipelineCreateInfo pipelineInfo({}, shaderStages, &vertexInputInfo,
 			&inputAssembly, nullptr, &viewportState, &rasterizer, &multisampling, &depthStencil, &colorBlending, nullptr,
@@ -393,7 +394,8 @@ namespace vulkanbot
 		return {true, ""};
 	}
 
-	std::tuple<bool, std::string> VulkanBackend::uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile)
+	std::tuple<bool, std::string> VulkanBackend::uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile,
+		vk::CullModeFlags cullMode, bool depth)
 	{
 		std::vector<unsigned int> vertexBin;
 		std::vector<unsigned int> fragmentBin;
@@ -456,13 +458,14 @@ namespace vulkanbot
 		if(!std::get<0>(fragmentResult))
 			return {std::get<0>(fragmentResult), "fragment: "+std::get<1>(fragmentResult)};
 
-		uploadShader(vertexShader, fragmentShader);
+		uploadShader(vertexShader, fragmentShader, cullMode, depth);
 		return {true, ""};
 	}
 
-	void VulkanBackend::uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader)
+	void VulkanBackend::uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader,
+		vk::CullModeFlags cullMode, bool depth)
 	{
-		m_pipeline = createPipeline(vertexShader, fragmentShader);
+		m_pipeline = createPipeline(vertexShader, fragmentShader, cullMode, depth);
 
 		m_commandBuffer->reset();
 		m_commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
