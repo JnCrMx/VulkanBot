@@ -35,17 +35,18 @@ namespace vulkanbot
 
 	ImageData::ImageData(	vk::PhysicalDevice const & physicalDevice,
 							vk::UniqueDevice const & device,
-				  			vk::Format format_, 
-				  			vk::Extent2D const & extent, 
-				  			vk::ImageUsageFlags usage,
-				  			vk::MemoryPropertyFlags memoryProperties) : format(format_)
+							vk::Format format_,
+							vk::Extent2D const & extent,
+							vk::ImageUsageFlags usage,
+							vk::MemoryPropertyFlags memoryProperties,
+							vk::ImageAspectFlags aspectFlags) : format(format_)
 	{
-		image = device->createImageUnique(vk::ImageCreateInfo({}, 
+		image = device->createImageUnique(vk::ImageCreateInfo({},
 			vk::ImageType::e2D, format_,
 			vk::Extent3D(extent, 1), 1, 1,
 			vk::SampleCountFlagBits::e1, vk::ImageTiling::eOptimal,
 			usage,
-			vk::SharingMode::eExclusive, 0, nullptr, 
+			vk::SharingMode::eExclusive, 0, nullptr,
 			vk::ImageLayout::eUndefined));
 
 		vk::MemoryRequirements memoryRequirements = device->getImageMemoryRequirements(image.get());
@@ -57,14 +58,14 @@ namespace vulkanbot
 
 		device->bindImageMemory(image.get(), deviceMemory.get(), 0);
 
-		vk::ComponentMapping componentMapping(vk::ComponentSwizzle::eIdentity, 
+		vk::ComponentMapping componentMapping(vk::ComponentSwizzle::eIdentity,
 			vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity, vk::ComponentSwizzle::eIdentity);
 		vk::ImageViewCreateInfo imageViewCreateInfo(vk::ImageViewCreateFlags(),
-                                                	image.get(),
-                                                	vk::ImageViewType::e2D,
-                                                	format,
-                                                	componentMapping,
-                                                	vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+													image.get(),
+													vk::ImageViewType::e2D,
+													format,
+													componentMapping,
+													vk::ImageSubresourceRange(aspectFlags, 0, 1, 0, 1));
 		imageView = device->createImageViewUnique(imageViewCreateInfo);
 	}
 
@@ -115,36 +116,40 @@ namespace vulkanbot
 
 		std::vector<vk::QueueFamilyProperties> queueFamilyProperties = m_physicalDevice.getQueueFamilyProperties();
 		size_t graphicsQueueFamilyIndex = std::distance(
-      		queueFamilyProperties.begin(),
-      		std::find_if(
-        		queueFamilyProperties.begin(), queueFamilyProperties.end(), []( vk::QueueFamilyProperties const & qfp ) {
-          			return qfp.queueFlags & vk::QueueFlagBits::eGraphics;
-        	}));
-    	assert(graphicsQueueFamilyIndex < queueFamilyProperties.size());
+			queueFamilyProperties.begin(),
+			std::find_if(
+				queueFamilyProperties.begin(), queueFamilyProperties.end(), []( vk::QueueFamilyProperties const & qfp ) {
+					return qfp.queueFlags & vk::QueueFlagBits::eGraphics;
+		}));
+		assert(graphicsQueueFamilyIndex < queueFamilyProperties.size());
 
 		float queuePriority = 0.0f;
-    	vk::DeviceQueueCreateInfo deviceQueueCreateInfo(
-      		vk::DeviceQueueCreateFlags(), static_cast<uint32_t>(graphicsQueueFamilyIndex), 1, &queuePriority);
-    	m_device = m_physicalDevice.createDeviceUnique(vk::DeviceCreateInfo(vk::DeviceCreateFlags(), deviceQueueCreateInfo));
+		vk::DeviceQueueCreateInfo deviceQueueCreateInfo(
+			vk::DeviceQueueCreateFlags(), static_cast<uint32_t>(graphicsQueueFamilyIndex), 1, &queuePriority);
+		m_device = m_physicalDevice.createDeviceUnique(vk::DeviceCreateInfo(vk::DeviceCreateFlags(), deviceQueueCreateInfo));
 
 		m_commandPool = m_device->createCommandPoolUnique(
-    		vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueFamilyIndex));
+			vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueFamilyIndex));
 
 		m_queue = m_device->getQueue(graphicsQueueFamilyIndex, 0);
 
 
-		m_texture = new ImageData(m_physicalDevice, m_device, vk::Format::eR8G8B8A8Unorm, 
+		m_texture = new ImageData(m_physicalDevice, m_device, vk::Format::eR8G8B8A8Unorm,
 			{m_textureWidth, m_textureHeight},
-			vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst, 
+			vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
 			vk::MemoryPropertyFlagBits::eDeviceLocal);
 		m_textureSampler = m_device->createSamplerUnique(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear,
 			vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
 			0.0f, false, 16.0f, false, vk::CompareOp::eNever, 0.0f, 0.0f, vk::BorderColor::eFloatOpaqueBlack));
 
-		m_renderImage = new ImageData(m_physicalDevice, m_device, vk::Format::eR8G8B8A8Unorm, 
+		m_renderImage = new ImageData(m_physicalDevice, m_device, vk::Format::eR8G8B8A8Unorm,
 			{m_width, m_height},
 			vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		m_depthImage = new ImageData(m_physicalDevice, m_device, vk::Format::eD32Sfloat,
+			{m_width, m_height},
+			vk::ImageUsageFlagBits::eDepthStencilAttachment,
+			vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eDepth);
 
 		{
 			m_inputImageBuffer = m_device->createBufferUnique(vk::BufferCreateInfo(vk::BufferCreateFlags(), m_textureWidth*m_textureHeight*4,
@@ -216,23 +221,35 @@ namespace vulkanbot
 			m_device->bindBufferMemory(m_uniformBuffer.get(), m_uniformMemory.get(), 0);
 		}
 
-		std::array<vk::AttachmentDescription, 1> attachmentDescriptions;
+		std::array<vk::AttachmentDescription, 2> attachmentDescriptions;
 		attachmentDescriptions[0] = vk::AttachmentDescription(
 			{}, m_renderImage->format, vk::SampleCountFlagBits::e1,
-			vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, 
+			vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
 			vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
 			vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferSrcOptimal);
+		attachmentDescriptions[1] = vk::AttachmentDescription(
+			{}, m_depthImage->format, vk::SampleCountFlagBits::e1,
+			vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore,
+			vk::AttachmentLoadOp::eDontCare, vk::AttachmentStoreOp::eDontCare,
+			vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 		vk::AttachmentReference colorAttachmentRef(0, vk::ImageLayout::eColorAttachmentOptimal);
+		vk::AttachmentReference depthAttachmentRef(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 		vk::SubpassDescription subpass(
-			{}, vk::PipelineBindPoint::eGraphics, {}, colorAttachmentRef, {}, {});
-		vk::SubpassDependency dependency(VK_SUBPASS_EXTERNAL, 0, 
-			vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eColorAttachmentOutput, {}, {}, {});
+			{}, vk::PipelineBindPoint::eGraphics, {}, colorAttachmentRef, {}, &depthAttachmentRef);
+		vk::SubpassDependency dependency(VK_SUBPASS_EXTERNAL, 0,
+			vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
+			vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests, {},
+			vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite, {});
 
 		m_renderPass = m_device->createRenderPassUnique(
-			vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(), attachmentDescriptions, subpass));
+			vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(), attachmentDescriptions, subpass, dependency));
 
+		std::array<vk::ImageView, 2> attachments = {
+			m_renderImage->imageView.get(),
+			m_depthImage->imageView.get()
+		};
 		m_framebuffer = m_device->createFramebufferUnique(
-			vk::FramebufferCreateInfo({}, m_renderPass.get(), m_renderImage->imageView.get(), m_width, m_height, 1));
+			vk::FramebufferCreateInfo({}, m_renderPass.get(), attachments, m_width, m_height, 1));
 
 		std::array<vk::DescriptorSetLayoutBinding, 2> bindings;
 		bindings[0] = vk::DescriptorSetLayoutBinding(
@@ -244,12 +261,12 @@ namespace vulkanbot
 		vk::DescriptorPoolSize poolSize(vk::DescriptorType::eCombinedImageSampler, 1);
 		vk::DescriptorPoolSize uniformPoolSize(vk::DescriptorType::eUniformBuffer, 1);
 		std::array<vk::DescriptorPoolSize, 2> poolSizes{poolSize, uniformPoolSize};
-		
+
 		m_descriptorPool = m_device->createDescriptorPoolUnique(
 			vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 2, poolSizes));
-			
+
 		m_descriptorSet = std::move(
-      		m_device->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo(m_descriptorPool.get(), m_descriptorSetLayout.get())).front());
+			m_device->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo(m_descriptorPool.get(), m_descriptorSetLayout.get())).front());
 
 		vk::DescriptorImageInfo descriptorImageInfo(m_textureSampler.get(), m_texture->imageView.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
 		vk::DescriptorBufferInfo descriptorBufferInfo(m_uniformBuffer.get(), 0, sizeof(UniformBufferObject));
@@ -261,7 +278,7 @@ namespace vulkanbot
 		m_pipelineLayout = m_device->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo({}, m_descriptorSetLayout.get()));
 
 		m_commandBuffer = std::move(m_device->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(
-                                    m_commandPool.get(), vk::CommandBufferLevel::ePrimary, 1)).front());
+									m_commandPool.get(), vk::CommandBufferLevel::ePrimary, 1)).front());
 
 		m_fence = m_device->createFenceUnique(vk::FenceCreateInfo());
 	}
@@ -319,27 +336,29 @@ namespace vulkanbot
 		vk::PipelineRasterizationStateCreateInfo rasterizer({}, false, false, vk::PolygonMode::eFill,
 			vk::CullModeFlagBits::eFront, vk::FrontFace::eCounterClockwise, false, 0.0f, 0.0f, 0.0f, 1.0f);
 		vk::PipelineMultisampleStateCreateInfo multisampling({}, vk::SampleCountFlagBits::e1);
-		vk::PipelineColorBlendAttachmentState colorBlendAttachment(false, 
+		vk::PipelineColorBlendAttachmentState colorBlendAttachment(false,
 			vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd,
-			vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd, 
+			vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd,
 			vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
 		vk::PipelineColorBlendStateCreateInfo colorBlending({}, false, vk::LogicOp::eNoOp, colorBlendAttachment, {{1.0f, 1.0f, 1.0f, 1.0f}});
 
-		vk::GraphicsPipelineCreateInfo pipelineInfo({}, shaderStages, &vertexInputInfo, 
-			&inputAssembly, nullptr, &viewportState, &rasterizer, &multisampling, nullptr, &colorBlending, nullptr, 
+		vk::PipelineDepthStencilStateCreateInfo depthStencil({}, true, true, vk::CompareOp::eLessOrEqual, false);
+
+		vk::GraphicsPipelineCreateInfo pipelineInfo({}, shaderStages, &vertexInputInfo,
+			&inputAssembly, nullptr, &viewportState, &rasterizer, &multisampling, &depthStencil, &colorBlending, nullptr,
 			m_pipelineLayout.get(), m_renderPass.get());
 
-    	vk::Result result;
-    	vk::UniquePipeline pipeline;
+		vk::Result result;
+		vk::UniquePipeline pipeline;
 		std::tie( result, pipeline ) = m_device->createGraphicsPipelineUnique(nullptr, pipelineInfo).asTuple();
 		switch ( result )
-    	{
-      		case vk::Result::eSuccess: break;
-      		case vk::Result::ePipelineCompileRequiredEXT:
-			  	std::cerr << "Extension required for pipeline!" << std::endl;
-        		break;
-      		default: assert( false );  // should never happen
-    	}
+		{
+			case vk::Result::eSuccess: break;
+			case vk::Result::ePipelineCompileRequiredEXT:
+				std::cerr << "Extension required for pipeline!" << std::endl;
+				break;
+			default: assert( false );  // should never happen
+		}
 
 		return pipeline;
 	}
@@ -347,7 +366,7 @@ namespace vulkanbot
 	std::tuple<bool, std::string> compileShader(EShLanguage stage, std::string glslCode, std::vector<unsigned int>& shaderCode)
 	{
 		const char * shaderStrings[1];
-	    shaderStrings[0] = glslCode.data();
+		shaderStrings[0] = glslCode.data();
 
 		glslang::TShader shader(stage);
 		shader.setStrings(shaderStrings, 1);
@@ -448,32 +467,32 @@ namespace vulkanbot
 		m_commandBuffer->reset();
 		m_commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
 
-		m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, 
-			{}, {}, {}, 
+		m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+			{}, {}, {},
 			vk::ImageMemoryBarrier(
-				{}, vk::AccessFlagBits::eTransferWrite, 
-				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, 
+				{}, vk::AccessFlagBits::eTransferWrite,
+				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
 				m_texture->image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)));
 		std::array<vk::BufferImageCopy, 1> regions;
 		regions[0] = vk::BufferImageCopy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), {0, 0, 0}, {m_textureWidth, m_textureHeight, 1});
 		m_commandBuffer->copyBufferToImage(m_inputImageBuffer.get(), m_texture->image.get(), vk::ImageLayout::eTransferDstOptimal, regions);
-		m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, 
+		m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
 			{}, {}, {},
 			vk::ImageMemoryBarrier(
-				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, 
-				vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal, 
-				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, 
+				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+				vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
 				m_texture->image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)));
 
-    	std::array<vk::ClearValue, 1> clearValues;
+		std::array<vk::ClearValue, 2> clearValues;
 		clearValues[0].color = vk::ClearColorValue(std::array<float, 4>({{0.0f, 0.0f, 0.0f, 1.0f}}));
+		clearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 		m_commandBuffer->beginRenderPass(
 			vk::RenderPassBeginInfo(
-				m_renderPass.get(), 
-				m_framebuffer.get(), 
-				{{0, 0}, {static_cast<uint32_t>(m_width), static_cast<uint32_t>(m_height)}},
-				1, clearValues.data()), 
+				m_renderPass.get(),
+				m_framebuffer.get(),
+				{{0, 0}, {static_cast<uint32_t>(m_width), static_cast<uint32_t>(m_height)}}, clearValues),
 			vk::SubpassContents::eInline);
 		m_commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, m_pipeline.get());
 		m_commandBuffer->bindVertexBuffers(0, m_vertexBuffer.get(), static_cast<vk::DeviceSize>(0));
@@ -508,10 +527,10 @@ namespace vulkanbot
 		vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eColorAttachmentOutput);
 		m_queue.submit(vk::SubmitInfo(0, nullptr, &waitDestinationStageMask, 1, &m_commandBuffer.get()), m_fence.get());
 
-    	auto t1 = std::chrono::high_resolution_clock::now();
+		auto t1 = std::chrono::high_resolution_clock::now();
 		vk::Result r = m_device->waitForFences(m_fence.get(), true, UINT64_MAX);
-    	auto t2 = std::chrono::high_resolution_clock::now();
-    	long duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+		auto t2 = std::chrono::high_resolution_clock::now();
+		long duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
 
 		m_device->resetFences(m_fence.get());
 
@@ -524,6 +543,8 @@ namespace vulkanbot
 	{
 		if(m_renderImage)
 			delete m_renderImage;
+		if(m_depthImage)
+			delete m_depthImage;
 		if(m_texture)
 			delete m_texture;
 	}

@@ -52,7 +52,8 @@ namespace vulkanbot
 					vk::Format format_, 
 					vk::Extent2D const & extent, 
 					vk::ImageUsageFlags usage,
-					vk::MemoryPropertyFlags memoryProperties);
+					vk::MemoryPropertyFlags memoryProperties,
+					vk::ImageAspectFlags aspectFlags = vk::ImageAspectFlagBits::eColor);
 	};
 
 	class VulkanBackend
@@ -118,6 +119,7 @@ namespace vulkanbot
 			vk::UniqueSampler m_textureSampler;
 
 			ImageData* m_renderImage;
+			ImageData* m_depthImage;
 			vk::UniqueRenderPass m_renderPass;
 			vk::UniqueFramebuffer m_framebuffer;
 
