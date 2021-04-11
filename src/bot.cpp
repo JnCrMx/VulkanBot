@@ -1,3 +1,4 @@
+#include "sleepy_discord/attachment.h"
 #include "sleepy_discord/client.h"
 #include "vulkan_backend.h"
 #include <bits/stdint-uintn.h>
@@ -5,6 +6,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <ratio>
 #include <string>
 #include <sys/stat.h>
@@ -23,8 +25,8 @@ using namespace vulkanbot;
 static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
 	std::vector<unsigned char>* vec = (std::vector<unsigned char>*)userp;
-    vec->insert(vec->end(), (unsigned char*)contents, (unsigned char*) contents + size * nmemb);
-    return size * nmemb;
+	vec->insert(vec->end(), (unsigned char*)contents, (unsigned char*) contents + size * nmemb);
+	return size * nmemb;
 }
 
 class MyClientClass : public SleepyDiscord::DiscordClient
@@ -146,6 +148,13 @@ public:
 				}
 			}
 
+			std::optional<SleepyDiscord::Attachment> imageAttachment;
+			for(const SleepyDiscord::Attachment& a : message.attachments)
+			{
+				if(!imageAttachment.has_value() && a.filename.ends_with(".png"))
+					imageAttachment = a;
+			}
+
 			auto animated = message.content.find("animated", end);
 			bool nocull = message.content.find("nocull", end) != std::string::npos;
 			bool nodepth = message.content.find("nodepth", end) != std::string::npos;
@@ -156,21 +165,23 @@ public:
 
 			if(result)
 			{
-				std::string avatarUrl = "https://cdn.discordapp.com/avatars/"+message.author.ID.string()+"/"+message.author.avatar+".png";
+				std::string url = "https://cdn.discordapp.com/avatars/"+message.author.ID.string()+"/"+message.author.avatar+".png";
+				if(imageAttachment.has_value())
+					url = imageAttachment->url;
 				std::vector<unsigned char> png;
 
 				CURL *curl;
 				curl = curl_easy_init();
-				curl_easy_setopt(curl, CURLOPT_URL, avatarUrl.c_str());
+				curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
 				curl_easy_setopt(curl, CURLOPT_WRITEDATA, &png);
 				curl_easy_perform(curl);
-    			curl_easy_cleanup(curl);
+				curl_easy_cleanup(curl);
 
 				std::vector<unsigned char> image;
 				unsigned int w, h;
 				lodepng::decode(image, w, h, png);
-				backend.readImage(image);
+				std::unique_ptr<ImageData> vkImage = backend.uploadImage(w, h, image);
 
 				if(animated != std::string::npos)
 				{

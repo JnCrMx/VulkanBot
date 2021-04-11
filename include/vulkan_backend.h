@@ -62,48 +62,33 @@ namespace vulkanbot
 			~VulkanBackend();
 
 			void initVulkan(int width, int height);
-			void uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment,
-				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
 
 			std::tuple<bool, std::string> uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile,
 				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
 
-			void readImage(const std::vector<unsigned char>& data);
+			std::unique_ptr<ImageData> uploadImage(int width, int height, const std::vector<unsigned char>& data);
 			void updateUniformObject(std::function<void(UniformBufferObject*)> updater);
-
-			template<typename ImageProvider>
-			void loadImage(ImageProvider const & provider)
-			{
-				uint8_t * pData = static_cast<uint8_t *>(m_device->mapMemory(m_inputImageMemory.get(), 0, m_inputImageMemoryRequirements.size));
-				provider(pData);
-				m_device->unmapMemory(m_inputImageMemory.get());
-			}
 
 			void renderFrame(std::function<void(uint8_t*, vk::DeviceSize, int, int, vk::Result, long)> consumer);
 		private:
 			uint32_t m_width = 1024;
 			uint32_t m_height = 1024;
 
-			uint32_t m_textureWidth = 128;
-			uint32_t m_textureHeight = 128;
-
 			vk::UniqueShaderModule createShader(const std::vector<unsigned int>& code);
 			vk::UniqueShaderModule createShader(const std::vector<char>& code);
 			vk::UniquePipeline createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment,
 				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
+			void buildCommandBuffer();
 
 			vk::UniqueInstance m_instance;
 			vk::PhysicalDevice m_physicalDevice;
 			vk::UniqueDevice m_device;
 			vk::Queue m_queue;
+			vk::Queue m_transferQueue;
 			vk::UniqueFence m_fence;
 			
 			vk::UniqueCommandPool m_commandPool;
 			vk::UniqueCommandBuffer m_commandBuffer;
-
-			vk::UniqueBuffer m_inputImageBuffer;
-			vk::MemoryRequirements m_inputImageMemoryRequirements;
-			vk::UniqueDeviceMemory m_inputImageMemory;
 
 			vk::UniqueBuffer m_outputImageBuffer;
 			vk::MemoryRequirements m_outputImageMemoryRequirements;
@@ -118,8 +103,7 @@ namespace vulkanbot
 			vk::UniqueBuffer m_uniformBuffer;
 			vk::UniqueDeviceMemory m_uniformMemory;
 
-			ImageData* m_texture;
-			vk::UniqueSampler m_textureSampler;
+			vk::UniqueSampler m_sampler;
 
 			ImageData* m_renderImage;
 			ImageData* m_depthImage;

@@ -7,6 +7,7 @@
 #include <glm/fwd.hpp>
 #include <iostream>
 #include <fstream>
+#include <memory>
 #include <stdexcept>
 #include <chrono>
 #include <string>
@@ -122,6 +123,13 @@ namespace vulkanbot
 					return qfp.queueFlags & vk::QueueFlagBits::eGraphics;
 		}));
 		assert(graphicsQueueFamilyIndex < queueFamilyProperties.size());
+		size_t transferQueueFamilyIndex = std::distance(
+			queueFamilyProperties.begin(),
+			std::find_if(
+				queueFamilyProperties.begin(), queueFamilyProperties.end(), []( vk::QueueFamilyProperties const & qfp ) {
+					return qfp.queueFlags & vk::QueueFlagBits::eTransfer;
+		}));
+		assert(transferQueueFamilyIndex < queueFamilyProperties.size());
 
 		float queuePriority = 0.0f;
 		vk::DeviceQueueCreateInfo deviceQueueCreateInfo(
@@ -132,13 +140,9 @@ namespace vulkanbot
 			vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueFamilyIndex));
 
 		m_queue = m_device->getQueue(graphicsQueueFamilyIndex, 0);
+		m_transferQueue = m_device->getQueue(transferQueueFamilyIndex, 0);
 
-
-		m_texture = new ImageData(m_physicalDevice, m_device, vk::Format::eR8G8B8A8Unorm,
-			{m_textureWidth, m_textureHeight},
-			vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
-			vk::MemoryPropertyFlagBits::eDeviceLocal);
-		m_textureSampler = m_device->createSamplerUnique(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear,
+		m_sampler = m_device->createSamplerUnique(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear,
 			vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
 			0.0f, false, 16.0f, false, vk::CompareOp::eNever, 0.0f, 0.0f, vk::BorderColor::eFloatOpaqueBlack));
 
@@ -151,19 +155,6 @@ namespace vulkanbot
 			vk::ImageUsageFlagBits::eDepthStencilAttachment,
 			vk::MemoryPropertyFlagBits::eDeviceLocal, vk::ImageAspectFlagBits::eDepth);
 
-		{
-			m_inputImageBuffer = m_device->createBufferUnique(vk::BufferCreateInfo(vk::BufferCreateFlags(), m_textureWidth*m_textureHeight*4,
-				vk::BufferUsageFlagBits::eTransferSrc));
-			m_inputImageMemoryRequirements = m_device->getBufferMemoryRequirements(m_inputImageBuffer.get());
-			std::cout << "Input Buffer memory: " << m_inputImageMemoryRequirements.size << std::endl;
-
-			uint32_t memoryTypeIndex = findMemoryType(m_physicalDevice.getMemoryProperties(),
-				m_inputImageMemoryRequirements.memoryTypeBits,
-				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
-			m_inputImageMemory = m_device->allocateMemoryUnique(vk::MemoryAllocateInfo(m_inputImageMemoryRequirements.size, memoryTypeIndex));
-
-			m_device->bindBufferMemory(m_inputImageBuffer.get(), m_inputImageMemory.get(), 0);
-		}
 		{
 			m_outputImageBuffer = m_device->createBufferUnique(vk::BufferCreateInfo(vk::BufferCreateFlags(), m_width*m_height*4,
 				vk::BufferUsageFlagBits::eTransferDst));
@@ -268,11 +259,10 @@ namespace vulkanbot
 		m_descriptorSet = std::move(
 			m_device->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo(m_descriptorPool.get(), m_descriptorSetLayout.get())).front());
 
-		vk::DescriptorImageInfo descriptorImageInfo(m_textureSampler.get(), m_texture->imageView.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
 		vk::DescriptorBufferInfo descriptorBufferInfo(m_uniformBuffer.get(), 0, sizeof(UniformBufferObject));
-		std::array<vk::WriteDescriptorSet, 2> writeDescriptorSets;
-		writeDescriptorSets[0] = vk::WriteDescriptorSet(m_descriptorSet.get(), 0, 0, vk::DescriptorType::eCombinedImageSampler, descriptorImageInfo, nullptr, nullptr);
-		writeDescriptorSets[1] = vk::WriteDescriptorSet(m_descriptorSet.get(), 1, 0, vk::DescriptorType::eUniformBuffer, nullptr, descriptorBufferInfo, nullptr);
+		std::array<vk::WriteDescriptorSet, 1> writeDescriptorSets = {
+			vk::WriteDescriptorSet(m_descriptorSet.get(), 1, 0, vk::DescriptorType::eUniformBuffer, nullptr, descriptorBufferInfo, nullptr)
+		};
 		m_device->updateDescriptorSets(writeDescriptorSets, nullptr);
 
 		m_pipelineLayout = m_device->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo({}, m_descriptorSetLayout.get()));
@@ -458,19 +448,16 @@ namespace vulkanbot
 		if(!std::get<0>(fragmentResult))
 			return {std::get<0>(fragmentResult), "fragment: "+std::get<1>(fragmentResult)};
 
-		uploadShader(vertexShader, fragmentShader, cullMode, depth);
+		m_pipeline = createPipeline(vertexShader, fragmentShader, cullMode, depth);
 		return {true, ""};
 	}
 
-	void VulkanBackend::uploadShader(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader,
-		vk::CullModeFlags cullMode, bool depth)
+	void VulkanBackend::buildCommandBuffer()
 	{
-		m_pipeline = createPipeline(vertexShader, fragmentShader, cullMode, depth);
-
 		m_commandBuffer->reset();
 		m_commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
 
-		m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+		/*m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
 			{}, {}, {},
 			vk::ImageMemoryBarrier(
 				{}, vk::AccessFlagBits::eTransferWrite,
@@ -486,7 +473,7 @@ namespace vulkanbot
 				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
 				vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
 				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
-				m_texture->image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)));
+				m_texture->image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)));*/
 
 		std::array<vk::ClearValue, 2> clearValues;
 		clearValues[0].color = vk::ClearColorValue(std::array<float, 4>({{0.0f, 0.0f, 0.0f, 1.0f}}));
@@ -505,17 +492,73 @@ namespace vulkanbot
 		m_commandBuffer->drawIndexed(m_indexCount, 1, 0, 0, 0);
 		m_commandBuffer->endRenderPass();
 
-		regions[0] = vk::BufferImageCopy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), {0, 0, 0}, {m_width, m_height, 1});
+		std::array<vk::BufferImageCopy, 1> regions = {
+			vk::BufferImageCopy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), {0, 0, 0}, {m_width, m_height, 1})
+		};
 		m_commandBuffer->copyImageToBuffer(m_renderImage->image.get(), vk::ImageLayout::eTransferSrcOptimal, m_outputImageBuffer.get(), regions);
 
 		m_commandBuffer->end();
 	}
 
-	void VulkanBackend::readImage(const std::vector<unsigned char>& data)
+	std::unique_ptr<ImageData> VulkanBackend::uploadImage(int width, int height, const std::vector<unsigned char>& data)
 	{
-		uint8_t *pData = static_cast<uint8_t *>(m_device->mapMemory(m_inputImageMemory.get(), 0, m_inputImageMemoryRequirements.size));
+		std::unique_ptr<ImageData> image = std::make_unique<ImageData>(m_physicalDevice, m_device, vk::Format::eR8G8B8A8Unorm,
+			vk::Extent2D(static_cast<uint32_t>(width), static_cast<uint32_t>(height)),
+			vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst,
+			vk::MemoryPropertyFlagBits::eDeviceLocal);
+
+		vk::UniqueBuffer buffer = m_device->createBufferUnique(vk::BufferCreateInfo({}, data.size(), vk::BufferUsageFlagBits::eTransferSrc,
+			vk::SharingMode::eExclusive));
+		vk::MemoryRequirements memoryRequirements = m_device->getBufferMemoryRequirements(buffer.get());
+		uint32_t memoryTypeIndex = findMemoryType(m_physicalDevice.getMemoryProperties(),
+			memoryRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+		vk::UniqueDeviceMemory memory = m_device->allocateMemoryUnique(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
+		m_device->bindBufferMemory(buffer.get(), memory.get(), 0);
+
+		uint8_t *pData = static_cast<uint8_t *>(m_device->mapMemory(memory.get(), 0, memoryRequirements.size));
 		memcpy(pData, data.data(), data.size());
-		m_device->unmapMemory(m_inputImageMemory.get());
+		m_device->unmapMemory(memory.get());
+
+		vk::UniqueCommandBuffer commandBuffer = std::move(m_device->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(
+			m_commandPool.get(), vk::CommandBufferLevel::ePrimary, 1)).front());
+		commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
+		commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+			{}, {}, {},
+			vk::ImageMemoryBarrier(
+				{}, vk::AccessFlagBits::eTransferWrite,
+				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal,
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+				image->image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)));
+		std::array<vk::BufferImageCopy, 1> regions = {
+			vk::BufferImageCopy(0, 0, 0, vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, 0, 0, 1), {0, 0, 0}, {static_cast<uint32_t>(width), static_cast<uint32_t>(height), 1})
+		};
+		commandBuffer->copyBufferToImage(buffer.get(), image->image.get(), vk::ImageLayout::eTransferDstOptimal, regions);
+		commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+			{}, {}, {},
+			vk::ImageMemoryBarrier(
+				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead,
+				vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+				image->image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)));
+		commandBuffer->end();
+
+		vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eTransfer);
+		m_queue.submit(vk::SubmitInfo(0, nullptr, &waitDestinationStageMask, 1, &commandBuffer.get()), m_fence.get());
+		vk::Result r = m_device->waitForFences(m_fence.get(), true, UINT64_MAX);
+		m_device->resetFences(m_fence.get());
+
+		assert(r == vk::Result::eSuccess);
+
+		vk::DescriptorImageInfo descriptorImageInfo(m_sampler.get(), image->imageView.get(), vk::ImageLayout::eShaderReadOnlyOptimal);
+		std::array<vk::WriteDescriptorSet, 1> writeDescriptorSets = {
+			vk::WriteDescriptorSet(m_descriptorSet.get(), 0, 0, vk::DescriptorType::eCombinedImageSampler, descriptorImageInfo, nullptr, nullptr)
+		};
+		m_device->updateDescriptorSets(writeDescriptorSets, nullptr);
+
+		buildCommandBuffer();
+
+		return image;
 	}
 
 	void VulkanBackend::updateUniformObject(std::function<void(UniformBufferObject*)> updater)
@@ -548,7 +591,5 @@ namespace vulkanbot
 			delete m_renderImage;
 		if(m_depthImage)
 			delete m_depthImage;
-		if(m_texture)
-			delete m_texture;
 	}
 }
