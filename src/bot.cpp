@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <ratio>
+#include <sstream>
 #include <string>
 #include <sys/stat.h>
 #include <vector>
@@ -26,6 +27,13 @@ static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *use
 {
 	std::vector<unsigned char>* vec = (std::vector<unsigned char>*)userp;
 	vec->insert(vec->end(), (unsigned char*)contents, (unsigned char*) contents + size * nmemb);
+	return size * nmemb;
+}
+
+static size_t WriteStringCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+	std::string* string = (std::string*)userp;
+	string->append(std::string((char*)contents));
 	return size * nmemb;
 }
 
@@ -114,7 +122,7 @@ public:
 					{
 						vertexPath = message.content.substr(vertexStart, vertexEnd - vertexStart);
 						if(vertexEnd > end)
-							end = vertexEnd + 3;
+							end = vertexEnd + 2;
 					}
 				}
 			}
@@ -129,7 +137,7 @@ public:
 					{
 						fragmentPath = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
 						if(fragmentEnd > end)
-							end = fragmentEnd + 3;
+							end = fragmentEnd + 2;
 					}
 				}
 				if(!fragmentPath.has_value())
@@ -142,17 +150,20 @@ public:
 						{
 							fragmentPath = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
 							if(fragmentEnd > end)
-								end = fragmentEnd + 3;
+								end = fragmentEnd + 2;
 						}
 					}
 				}
 			}
 
 			std::optional<SleepyDiscord::Attachment> imageAttachment;
+			std::optional<SleepyDiscord::Attachment> meshAttachment;
 			for(const SleepyDiscord::Attachment& a : message.attachments)
 			{
 				if(!imageAttachment.has_value() && a.filename.ends_with(".png"))
 					imageAttachment = a;
+				if(!meshAttachment.has_value() && a.filename.ends_with(".obj"))
+					meshAttachment = a;
 			}
 
 			auto animated = message.content.find("animated", end);
@@ -182,6 +193,83 @@ public:
 				unsigned int w, h;
 				lodepng::decode(image, w, h, png);
 				std::unique_ptr<ImageData> vkImage = backend.uploadImage(w, h, image);
+
+				std::unique_ptr<Mesh> mesh;
+				if(meshAttachment.has_value())
+				{
+					std::string objString;
+
+					curl = curl_easy_init();
+					curl_easy_setopt(curl, CURLOPT_URL, meshAttachment->url.c_str());
+					curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteStringCallback);
+					curl_easy_setopt(curl, CURLOPT_WRITEDATA, &objString);
+					curl_easy_perform(curl);
+					curl_easy_cleanup(curl);
+
+					std::vector<glm::vec3> vertices;
+					std::vector<glm::vec2> weirdTexCoords;
+					std::vector<glm::vec2> texCoords;
+					std::vector<glm::vec3> weirdNormals;
+					std::vector<glm::vec3> normals;
+					std::vector<uint16_t> indices;
+
+					std::istringstream stream(objString);
+					std::string line;
+					while(std::getline(stream, line))
+					{
+						std::istringstream lineStream(line);
+						std::string op;
+						lineStream >> op;
+
+						if(op == "v")
+						{
+							float x, y, z;
+							lineStream >> x >> y >> z;
+							vertices.push_back(glm::vec3(x, y, z));
+						}
+						else if(op == "vt")
+						{
+							float u, v;
+							lineStream >> u >> v;
+							weirdTexCoords.push_back(glm::vec2(u, v));
+						}
+						else if(op == "vn")
+						{
+							float x, y, z;
+							lineStream >> x >> y >> z;
+							weirdNormals.push_back(glm::vec3(x, y, z));
+						}
+						else if(op == "f")
+						{
+							std::array<std::string, 3> args;
+							lineStream >> args[0] >> args[1] >> args[2];
+
+							for(int i=0; i<3; i++)
+							{
+								std::istringstream aStream(args[i]);
+								int vertex, texCoord, normal;
+								aStream >> vertex;
+								aStream.ignore(1);
+								aStream >> texCoord;
+								aStream.ignore(1);
+								aStream >> normal;
+
+								texCoords.resize(std::max<int>(vertex, vertices.size()));
+								texCoords[vertex-1] = weirdTexCoords[texCoord-1];
+								normals.resize(std::max<int>(vertex, vertices.size()));
+								normals[vertex-1] = weirdNormals[normal-1];
+
+								indices.push_back(vertex-1);
+							}
+						}
+					}
+					mesh = backend.uploadMesh(vertices, texCoords, normals, indices);
+					backend.buildCommandBuffer(mesh.get());
+				}
+				else
+				{
+					backend.buildCommandBuffer();
+				}
 
 				if(animated != std::string::npos)
 				{

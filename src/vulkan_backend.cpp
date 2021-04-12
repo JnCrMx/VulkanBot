@@ -70,7 +70,47 @@ namespace vulkanbot
 		imageView = device->createImageViewUnique(imageViewCreateInfo);
 	}
 
-	void generate_grid(int N, std::vector<glm::vec3> &vertices, std::vector<uint16_t> &indices)
+	Mesh::Mesh(	vk::PhysicalDevice const & physicalDevice,
+				vk::UniqueDevice const & device,
+				int const vertexCount, int const indexCount)
+	{
+		this->vertexCount = vertexCount;
+		this->indexCount = indexCount;
+
+		vertexBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, vertexCount * sizeof(glm::vec3),
+			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst));
+		vk::MemoryRequirements vertexMemoryRequirements = device->getBufferMemoryRequirements(vertexBuffer.get());
+		uint32_t vertexMemoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), vertexMemoryRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		vertexMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(vertexMemoryRequirements.size, vertexMemoryTypeIndex));
+		device->bindBufferMemory(vertexBuffer.get(), vertexMemory.get(), 0);
+
+		texCoordBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, vertexCount * sizeof(glm::vec2),
+			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst));
+		vk::MemoryRequirements texCoordMemoryRequirements = device->getBufferMemoryRequirements(texCoordBuffer.get());
+		uint32_t texCoordMemoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), texCoordMemoryRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		texCoordMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(texCoordMemoryRequirements.size, texCoordMemoryTypeIndex));
+		device->bindBufferMemory(texCoordBuffer.get(), texCoordMemory.get(), 0);
+
+		normalBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, vertexCount * sizeof(glm::vec3),
+			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst));
+		vk::MemoryRequirements normalMemoryRequirements = device->getBufferMemoryRequirements(normalBuffer.get());
+		uint32_t normalMemoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), normalMemoryRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		normalMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(normalMemoryRequirements.size, normalMemoryTypeIndex));
+		device->bindBufferMemory(normalBuffer.get(), normalMemory.get(), 0);
+
+		indexBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, indexCount * sizeof(glm::vec3),
+			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst));
+		vk::MemoryRequirements indexMemoryRequirements = device->getBufferMemoryRequirements(indexBuffer.get());
+		uint32_t indexMemoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), indexMemoryRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eDeviceLocal);
+		indexMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(indexMemoryRequirements.size, indexMemoryTypeIndex));
+		device->bindBufferMemory(indexBuffer.get(), indexMemory.get(), 0);
+	}
+
+	void generate_grid(int N, std::vector<glm::vec3> &vertices, std::vector<glm::vec2> &texCoords, std::vector<uint16_t> &indices)
 	{
 		for(int j=0; j<=N; ++j)
 		{
@@ -80,6 +120,7 @@ namespace vulkanbot
 				float y = 2.0*((float)j/(float)N)-1.0;
 				float z = 0.0f;
 				vertices.push_back(glm::vec3(x, y, z));
+				texCoords.push_back(glm::vec2(x, y));
 			}
 		}
 
@@ -142,6 +183,9 @@ namespace vulkanbot
 		m_queue = m_device->getQueue(graphicsQueueFamilyIndex, 0);
 		m_transferQueue = m_device->getQueue(transferQueueFamilyIndex, 0);
 
+		m_fence = m_device->createFenceUnique(vk::FenceCreateInfo());
+		m_transferFence = m_device->createFenceUnique(vk::FenceCreateInfo());
+
 		m_sampler = m_device->createSamplerUnique(vk::SamplerCreateInfo({}, vk::Filter::eLinear, vk::Filter::eLinear,
 			vk::SamplerMipmapMode::eLinear, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat, vk::SamplerAddressMode::eRepeat,
 			0.0f, false, 16.0f, false, vk::CompareOp::eNever, 0.0f, 0.0f, vk::BorderColor::eFloatOpaqueBlack));
@@ -170,8 +214,14 @@ namespace vulkanbot
 		}
 
 		std::vector<glm::vec3> vertices;
+		std::vector<glm::vec2> texCoords;
+		std::vector<glm::vec3> normals;
 		std::vector<uint16_t> indices;
-		generate_grid(10, vertices, indices);
+		generate_grid(10, vertices, texCoords, indices);
+		normals.resize(vertices.size());
+		m_gridMesh = uploadMesh(vertices, texCoords, normals, indices);
+
+		/*
 		m_indexCount = indices.size();
 		{
 			m_indexBuffer = m_device->createBufferUnique(vk::BufferCreateInfo({}, indices.size()*sizeof(uint16_t),
@@ -201,6 +251,7 @@ namespace vulkanbot
 			memcpy(pData, vertices.data(), vertices.size() * sizeof(glm::vec3));
 			m_device->unmapMemory(m_vertexMemory.get());
 		}
+		*/
 		{
 			m_uniformBuffer = m_device->createBufferUnique(vk::BufferCreateInfo({}, sizeof(UniformBufferObject),
 				vk::BufferUsageFlagBits::eUniformBuffer));
@@ -269,8 +320,6 @@ namespace vulkanbot
 
 		m_commandBuffer = std::move(m_device->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(
 									m_commandPool.get(), vk::CommandBufferLevel::ePrimary, 1)).front());
-
-		m_fence = m_device->createFenceUnique(vk::FenceCreateInfo());
 	}
 
 	static std::vector<char> readFile(const std::string& filename)
@@ -311,12 +360,11 @@ namespace vulkanbot
 		vk::PipelineShaderStageCreateInfo fragmentShaderInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShader.get(), "main");
 		std::array<vk::PipelineShaderStageCreateInfo, 2> shaderStages = { vertexShaderInfo, fragmentShaderInfo };
 
-		auto bindingDescription = Vertex::getBindingDescription();
-		auto attributeDescriptions = Vertex::getAttributeDescriptions();
+		auto bindingDescription = Mesh::getBindingDescriptions();
+		auto attributeDescriptions = Mesh::getAttributeDescriptions();
 
 		vk::PipelineVertexInputStateCreateInfo vertexInputInfo({},
-			1, &bindingDescription,
-			static_cast<uint32_t>(attributeDescriptions.size()), attributeDescriptions.data());
+			bindingDescription, attributeDescriptions);
 
 		vk::PipelineInputAssemblyStateCreateInfo inputAssembly({}, vk::PrimitiveTopology::eTriangleList);
 		vk::Viewport viewport(0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height), 0.0f, 1.0f);
@@ -452,8 +500,13 @@ namespace vulkanbot
 		return {true, ""};
 	}
 
-	void VulkanBackend::buildCommandBuffer()
+	void VulkanBackend::buildCommandBuffer(Mesh* mesh)
 	{
+		if(mesh == nullptr)
+		{
+			mesh = m_gridMesh.get();
+		}
+
 		m_commandBuffer->reset();
 		m_commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
 
@@ -485,11 +538,11 @@ namespace vulkanbot
 				{{0, 0}, {static_cast<uint32_t>(m_width), static_cast<uint32_t>(m_height)}}, clearValues),
 			vk::SubpassContents::eInline);
 		m_commandBuffer->bindPipeline(vk::PipelineBindPoint::eGraphics, m_pipeline.get());
-		m_commandBuffer->bindVertexBuffers(0, m_vertexBuffer.get(), static_cast<vk::DeviceSize>(0));
-		m_commandBuffer->bindIndexBuffer(m_indexBuffer.get(), 0, vk::IndexType::eUint16);
+		m_commandBuffer->bindVertexBuffers(0, mesh->getBuffers(), mesh->getBufferOffsets());
+		m_commandBuffer->bindIndexBuffer(mesh->indexBuffer.get(), 0, vk::IndexType::eUint16);
 		m_commandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout.get(), 0, m_descriptorSet.get(), nullptr);
 
-		m_commandBuffer->drawIndexed(m_indexCount, 1, 0, 0, 0);
+		m_commandBuffer->drawIndexed(mesh->indexCount, 1, 0, 0, 0);
 		m_commandBuffer->endRenderPass();
 
 		std::array<vk::BufferImageCopy, 1> regions = {
@@ -544,9 +597,9 @@ namespace vulkanbot
 		commandBuffer->end();
 
 		vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eTransfer);
-		m_queue.submit(vk::SubmitInfo(0, nullptr, &waitDestinationStageMask, 1, &commandBuffer.get()), m_fence.get());
-		vk::Result r = m_device->waitForFences(m_fence.get(), true, UINT64_MAX);
-		m_device->resetFences(m_fence.get());
+		m_queue.submit(vk::SubmitInfo(0, nullptr, &waitDestinationStageMask, 1, &commandBuffer.get()), m_transferFence.get());
+		vk::Result r = m_device->waitForFences(m_transferFence.get(), true, UINT64_MAX);
+		m_device->resetFences(m_transferFence.get());
 
 		assert(r == vk::Result::eSuccess);
 
@@ -556,9 +609,56 @@ namespace vulkanbot
 		};
 		m_device->updateDescriptorSets(writeDescriptorSets, nullptr);
 
-		buildCommandBuffer();
-
 		return image;
+	}
+
+	std::unique_ptr<Mesh> VulkanBackend::uploadMesh(std::vector<glm::vec3> vertices,
+													std::vector<glm::vec2> texCoords,
+													std::vector<glm::vec3> normals,
+													std::vector<uint16_t> indices)
+	{
+		std::unique_ptr<Mesh> mesh = std::make_unique<Mesh>(m_physicalDevice, m_device, vertices.size(), indices.size());
+
+		size_t vertexSize = vertices.size() * sizeof(glm::vec3);
+		size_t texCoordSize = texCoords.size() * sizeof(glm::vec2);
+		size_t normalSize = normals.size() * sizeof(glm::vec3);
+		size_t indexSize = indices.size() * sizeof(uint16_t);
+		size_t totalSize = vertexSize + texCoordSize + normalSize + indexSize;
+
+		vk::UniqueBuffer srcBuffer = m_device->createBufferUnique(vk::BufferCreateInfo({}, totalSize,
+			vk::BufferUsageFlagBits::eTransferSrc));
+
+		vk::MemoryRequirements memoryRequirements = m_device->getBufferMemoryRequirements(srcBuffer.get());
+		uint32_t memoryTypeIndex = findMemoryType(m_physicalDevice.getMemoryProperties(), memoryRequirements.memoryTypeBits,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+		vk::UniqueDeviceMemory memory = m_device->allocateMemoryUnique(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
+
+		m_device->bindBufferMemory(srcBuffer.get(), memory.get(), 0);
+
+		uint8_t *pData = static_cast<uint8_t *>(m_device->mapMemory(memory.get(), 0, totalSize));
+		memcpy(pData + 0, vertices.data(), vertexSize);
+		memcpy(pData + vertexSize, texCoords.data(), texCoordSize);
+		memcpy(pData + vertexSize + texCoordSize, normals.data(), normalSize);
+		memcpy(pData + vertexSize + texCoordSize + normalSize, indices.data(), indexSize);
+		m_device->unmapMemory(memory.get());
+
+		vk::UniqueCommandBuffer commandBuffer = std::move(m_device->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(
+			m_commandPool.get(), vk::CommandBufferLevel::ePrimary, 1)).front());
+		commandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
+		commandBuffer->copyBuffer(srcBuffer.get(), mesh->vertexBuffer.get(), 	vk::BufferCopy(0, 0, vertexSize));
+		commandBuffer->copyBuffer(srcBuffer.get(), mesh->texCoordBuffer.get(), 	vk::BufferCopy(vertexSize, 0, texCoordSize));
+		commandBuffer->copyBuffer(srcBuffer.get(), mesh->normalBuffer.get(), 	vk::BufferCopy(vertexSize + texCoordSize, 0, normalSize));
+		commandBuffer->copyBuffer(srcBuffer.get(), mesh->indexBuffer.get(), 	vk::BufferCopy(vertexSize + texCoordSize + normalSize, 0, indexSize));
+		commandBuffer->end();
+
+		vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eTransfer);
+		m_queue.submit(vk::SubmitInfo(0, nullptr, &waitDestinationStageMask, 1, &commandBuffer.get()), m_transferFence.get());
+		vk::Result r = m_device->waitForFences(m_transferFence.get(), true, UINT64_MAX);
+		m_device->resetFences(m_transferFence.get());
+
+		assert(r == vk::Result::eSuccess);
+
+		return mesh;
 	}
 
 	void VulkanBackend::updateUniformObject(std::function<void(UniformBufferObject*)> updater)
