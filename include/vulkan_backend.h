@@ -58,11 +58,11 @@ namespace vulkanbot
 
 	struct Mesh {
 		vk::UniqueBuffer vertexBuffer;
-		vk::UniqueDeviceMemory vertexMemory;
 		vk::UniqueBuffer texCoordBuffer;
-		vk::UniqueDeviceMemory texCoordMemory;
 		vk::UniqueBuffer normalBuffer;
-		vk::UniqueDeviceMemory normalMemory;
+
+		vk::UniqueDeviceMemory memory;
+
 		vk::UniqueBuffer indexBuffer;
 		vk::UniqueDeviceMemory indexMemory;
 

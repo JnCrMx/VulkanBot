@@ -80,26 +80,21 @@ namespace vulkanbot
 		vertexBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, vertexCount * sizeof(glm::vec3),
 			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst));
 		vk::MemoryRequirements vertexMemoryRequirements = device->getBufferMemoryRequirements(vertexBuffer.get());
-		uint32_t vertexMemoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), vertexMemoryRequirements.memoryTypeBits,
-			vk::MemoryPropertyFlagBits::eDeviceLocal);
-		vertexMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(vertexMemoryRequirements.size, vertexMemoryTypeIndex));
-		device->bindBufferMemory(vertexBuffer.get(), vertexMemory.get(), 0);
-
 		texCoordBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, vertexCount * sizeof(glm::vec2),
 			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst));
 		vk::MemoryRequirements texCoordMemoryRequirements = device->getBufferMemoryRequirements(texCoordBuffer.get());
-		uint32_t texCoordMemoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), texCoordMemoryRequirements.memoryTypeBits,
-			vk::MemoryPropertyFlagBits::eDeviceLocal);
-		texCoordMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(texCoordMemoryRequirements.size, texCoordMemoryTypeIndex));
-		device->bindBufferMemory(texCoordBuffer.get(), texCoordMemory.get(), 0);
-
 		normalBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, vertexCount * sizeof(glm::vec3),
 			vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst));
 		vk::MemoryRequirements normalMemoryRequirements = device->getBufferMemoryRequirements(normalBuffer.get());
-		uint32_t normalMemoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), normalMemoryRequirements.memoryTypeBits,
-			vk::MemoryPropertyFlagBits::eDeviceLocal);
-		normalMemory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(normalMemoryRequirements.size, normalMemoryTypeIndex));
-		device->bindBufferMemory(normalBuffer.get(), normalMemory.get(), 0);
+
+		vk::DeviceSize totalSize = vertexMemoryRequirements.size + texCoordMemoryRequirements.size + normalMemoryRequirements.size;
+		uint32_t typeBits = vertexMemoryRequirements.memoryTypeBits | texCoordMemoryRequirements.memoryTypeBits | normalMemoryRequirements.memoryTypeBits;
+		uint32_t memoryTypeIndex = findMemoryType(physicalDevice.getMemoryProperties(), typeBits, vk::MemoryPropertyFlagBits::eDeviceLocal);
+		memory = device->allocateMemoryUnique(vk::MemoryAllocateInfo(totalSize, memoryTypeIndex));
+
+		device->bindBufferMemory(vertexBuffer.get(), 	memory.get(), 0);
+		device->bindBufferMemory(texCoordBuffer.get(), 	memory.get(), vertexMemoryRequirements.size);
+		device->bindBufferMemory(normalBuffer.get(), 	memory.get(), vertexMemoryRequirements.size + texCoordMemoryRequirements.size);
 
 		indexBuffer = device->createBufferUnique(vk::BufferCreateInfo({}, indexCount * sizeof(glm::vec3),
 			vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst));
