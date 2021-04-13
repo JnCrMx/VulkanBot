@@ -12,5 +12,6 @@ void main()
 {
 	vec3 normal = normalize(inNormal);
 
-	outColor = vec4(color * dot(light, normal), 1.0);
+	float diff = max(dot(light, normal), 0.0);
+	outColor = vec4(color * diff, 1.0);
 }
