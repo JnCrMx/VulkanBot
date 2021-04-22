@@ -41,6 +41,10 @@ namespace vulkanbot
 		float random;
 	};
 
+	struct OutputStorageObject {
+		float value;
+	};
+
 	struct ImageData {
 		vk::Format format;
 		vk::UniqueImage image;
@@ -113,8 +117,10 @@ namespace vulkanbot
 
 			std::tuple<bool, std::string> uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile,
 				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
+			std::tuple<bool, std::string> uploadComputeShader(const std::string compute, bool file);
 
 			void buildCommandBuffer(Mesh* mesh = nullptr);
+			void buildComputeCommandBuffer(int x, int y, int z);
 
 			std::unique_ptr<ImageData> uploadImage(int width, int height, const std::vector<unsigned char>& data);
 			std::unique_ptr<Mesh> uploadMesh(	std::vector<glm::vec3> vertices,
@@ -125,6 +131,7 @@ namespace vulkanbot
 			void updateUniformObject(std::function<void(UniformBufferObject*)> updater);
 
 			void renderFrame(std::function<void(uint8_t*, vk::DeviceSize, int, int, vk::Result, long)> consumer);
+			void doComputation(std::function<void(OutputStorageObject*, vk::Result, long)> consumer);
 		private:
 			uint32_t m_width = 1024;
 			uint32_t m_height = 1024;
@@ -133,6 +140,7 @@ namespace vulkanbot
 			vk::UniqueShaderModule createShader(const std::vector<char>& code);
 			vk::UniquePipeline createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragment,
 				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
+			vk::UniquePipeline createComputePipeline(vk::UniqueShaderModule& computeShader);
 
 			vk::UniqueInstance m_instance;
 			vk::PhysicalDevice m_physicalDevice;
@@ -144,6 +152,7 @@ namespace vulkanbot
 
 			vk::UniqueCommandPool m_commandPool;
 			vk::UniqueCommandBuffer m_commandBuffer;
+			vk::UniqueCommandBuffer m_computeCommandBuffer;
 
 			vk::UniqueBuffer m_outputImageBuffer;
 			vk::MemoryRequirements m_outputImageMemoryRequirements;
@@ -154,6 +163,9 @@ namespace vulkanbot
 			vk::UniqueBuffer m_uniformBuffer;
 			vk::UniqueDeviceMemory m_uniformMemory;
 
+			vk::UniqueBuffer m_outputStorageBuffer;
+			vk::UniqueDeviceMemory m_outputStorageMemory;
+
 			vk::UniqueSampler m_sampler;
 
 			ImageData* m_renderImage;
@@ -162,10 +174,15 @@ namespace vulkanbot
 			vk::UniqueFramebuffer m_framebuffer;
 
 			vk::UniqueDescriptorSetLayout m_descriptorSetLayout;
+			vk::UniqueDescriptorSetLayout m_computeDescriptorSetLayout;
 			vk::UniqueDescriptorPool m_descriptorPool;
 			vk::UniqueDescriptorSet m_descriptorSet;
+			vk::UniqueDescriptorSet m_computeDescriptorSet;
 
 			vk::UniquePipelineLayout m_pipelineLayout;
 			vk::UniquePipeline m_pipeline;
+
+			vk::UniquePipelineLayout m_computePipelineLayout;
+			vk::UniquePipeline m_computePipeline;
 	};
 }

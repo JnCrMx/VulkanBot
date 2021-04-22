@@ -342,6 +342,55 @@ public:
 				sendMessage(message.channelID, error);
 			}
 		}
+		else if(message.startsWith("comp```glsl") || message.startsWith("compfile``"))
+		{
+			sendTyping(message.channelID);
+			std::string::size_type end = 0;
+
+			std::optional<std::string> computeShader;
+			std::optional<std::string> computePath;
+
+			auto computeStart = message.content.find("comp```glsl");
+			if(computeStart != std::string::npos)
+			{
+				computeStart += 11 + 1;
+				auto computeEnd = message.content.find("```", computeStart);
+				if(computeEnd != std::string::npos)
+				{
+					computeShader = message.content.substr(computeStart, computeEnd - computeStart);
+					if(computeEnd > end)
+						end = computeEnd + 3;
+				}
+			}
+			if(!computeShader.has_value())
+			{
+				computeStart = message.content.find("compfile``");
+				if(computeStart != std::string::npos)
+				{
+					computeStart += 10;
+					auto computeEnd = message.content.find("``", computeStart);
+					if(computeEnd != std::string::npos)
+					{
+						computePath = message.content.substr(computeStart, computeEnd - computeStart);
+						if(computeEnd > end)
+							end = computeEnd + 2;
+					}
+				}
+			}
+			auto [result, error] = backend.uploadComputeShader(computeShader.value_or(computePath.value_or("base")), !computeShader.has_value());
+			if(result)
+			{
+				backend.buildComputeCommandBuffer(1, 1, 1);
+				backend.doComputation([this, message](OutputStorageObject* data, vk::Result result, long time)
+				{
+					sendMessage(message.channelID, "Computation finished in "+std::to_string(time)+" μs!```"+std::to_string(data->value)+"```");
+				});
+			}
+			else
+			{
+				sendMessage(message.channelID, error);
+			}
+		}
 	}
 private:
 	VulkanBackend backend;

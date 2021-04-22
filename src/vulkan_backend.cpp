@@ -3,6 +3,7 @@
 
 #include <array>
 #include <bits/stdint-uintn.h>
+#include <cstdint>
 #include <functional>
 #include <glm/fwd.hpp>
 #include <iostream>
@@ -257,6 +258,16 @@ namespace vulkanbot
 			m_uniformMemory = m_device->allocateMemoryUnique(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
 			m_device->bindBufferMemory(m_uniformBuffer.get(), m_uniformMemory.get(), 0);
 		}
+		{
+			m_outputStorageBuffer = m_device->createBufferUnique(vk::BufferCreateInfo({}, sizeof(OutputStorageObject),
+				vk::BufferUsageFlagBits::eStorageBuffer));
+			vk::MemoryRequirements memoryRequirements = m_device->getBufferMemoryRequirements(m_outputStorageBuffer.get());
+			uint32_t memoryTypeIndex = findMemoryType(m_physicalDevice.getMemoryProperties(),
+				memoryRequirements.memoryTypeBits,
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent);
+			m_outputStorageMemory = m_device->allocateMemoryUnique(vk::MemoryAllocateInfo(memoryRequirements.size, memoryTypeIndex));
+			m_device->bindBufferMemory(m_outputStorageBuffer.get(), m_outputStorageMemory.get(), 0);
+		}
 
 		std::array<vk::AttachmentDescription, 2> attachmentDescriptions;
 		attachmentDescriptions[0] = vk::AttachmentDescription(
@@ -295,25 +306,40 @@ namespace vulkanbot
 			1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
 		m_descriptorSetLayout = m_device->createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo({}, bindings));
 
+		std::array<vk::DescriptorSetLayoutBinding, 1> computeBindings = {
+			vk::DescriptorSetLayoutBinding(0, vk::DescriptorType::eStorageBuffer, 1, vk::ShaderStageFlagBits::eCompute)
+		};
+		m_computeDescriptorSetLayout = m_device->createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo({}, computeBindings));
+
 		vk::DescriptorPoolSize poolSize(vk::DescriptorType::eCombinedImageSampler, 1);
 		vk::DescriptorPoolSize uniformPoolSize(vk::DescriptorType::eUniformBuffer, 1);
-		std::array<vk::DescriptorPoolSize, 2> poolSizes{poolSize, uniformPoolSize};
+		vk::DescriptorPoolSize storagePoolSize(vk::DescriptorType::eStorageBuffer, 1);
+		std::array<vk::DescriptorPoolSize, 3> poolSizes{poolSize, uniformPoolSize, storagePoolSize};
 
 		m_descriptorPool = m_device->createDescriptorPoolUnique(
 			vk::DescriptorPoolCreateInfo(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet, 2, poolSizes));
 
 		m_descriptorSet = std::move(
 			m_device->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo(m_descriptorPool.get(), m_descriptorSetLayout.get())).front());
+		m_computeDescriptorSet = std::move(
+			m_device->allocateDescriptorSetsUnique(vk::DescriptorSetAllocateInfo(m_descriptorPool.get(), m_computeDescriptorSetLayout.get())).front());
 
 		vk::DescriptorBufferInfo descriptorBufferInfo(m_uniformBuffer.get(), 0, sizeof(UniformBufferObject));
-		std::array<vk::WriteDescriptorSet, 1> writeDescriptorSets = {
-			vk::WriteDescriptorSet(m_descriptorSet.get(), 1, 0, vk::DescriptorType::eUniformBuffer, nullptr, descriptorBufferInfo, nullptr)
+		vk::DescriptorBufferInfo descriptorStorageInfo(m_outputStorageBuffer.get(), 0, sizeof(OutputStorageObject));
+		std::array<vk::WriteDescriptorSet, 2> writeDescriptorSets = {
+			vk::WriteDescriptorSet(m_descriptorSet.get(), 1, 0, vk::DescriptorType::eUniformBuffer, nullptr, descriptorBufferInfo, nullptr),
+			vk::WriteDescriptorSet(m_computeDescriptorSet.get(), 0, 0, vk::DescriptorType::eStorageBuffer, nullptr, descriptorStorageInfo, nullptr)
 		};
 		m_device->updateDescriptorSets(writeDescriptorSets, nullptr);
 
 		m_pipelineLayout = m_device->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo({}, m_descriptorSetLayout.get()));
 
+		std::array<vk::DescriptorSetLayout, 2> computeLayouts = {m_descriptorSetLayout.get(), m_computeDescriptorSetLayout.get()};
+		m_computePipelineLayout = m_device->createPipelineLayoutUnique(vk::PipelineLayoutCreateInfo({}, computeLayouts));
+
 		m_commandBuffer = std::move(m_device->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(
+									m_commandPool.get(), vk::CommandBufferLevel::ePrimary, 1)).front());
+		m_computeCommandBuffer = std::move(m_device->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(
 									m_commandPool.get(), vk::CommandBufferLevel::ePrimary, 1)).front());
 	}
 
@@ -385,6 +411,26 @@ namespace vulkanbot
 		vk::Result result;
 		vk::UniquePipeline pipeline;
 		std::tie( result, pipeline ) = m_device->createGraphicsPipelineUnique(nullptr, pipelineInfo).asTuple();
+		switch ( result )
+		{
+			case vk::Result::eSuccess: break;
+			case vk::Result::ePipelineCompileRequiredEXT:
+				std::cerr << "Extension required for pipeline!" << std::endl;
+				break;
+			default: assert( false );  // should never happen
+		}
+
+		return pipeline;
+	}
+
+	vk::UniquePipeline VulkanBackend::createComputePipeline(vk::UniqueShaderModule& computeShader)
+	{
+		vk::PipelineShaderStageCreateInfo computeShaderInfo({}, vk::ShaderStageFlagBits::eCompute, computeShader.get(), "main");
+
+		vk::Result result;
+		vk::UniquePipeline pipeline;
+		std::tie( result, pipeline ) = m_device->createComputePipelineUnique(nullptr,
+			vk::ComputePipelineCreateInfo({}, computeShaderInfo, m_computePipelineLayout.get())).asTuple();
 		switch ( result )
 		{
 			case vk::Result::eSuccess: break;
@@ -495,6 +541,43 @@ namespace vulkanbot
 		return {true, ""};
 	}
 
+	std::tuple<bool, std::string> VulkanBackend::uploadComputeShader(const std::string compute, bool file)
+	{
+		std::vector<unsigned int> computeBin;
+		std::tuple<bool, std::string> computeResult = {true, ""};
+		vk::UniqueShaderModule computeShader;
+
+		glslang::InitializeProcess();
+		if(file)
+		{
+			if(compute.find("/") != std::string::npos)
+				computeResult = {false, "shader name contains /"};
+			else
+			{
+				try
+				{
+					computeShader = createShader(readFile("shaders/"+compute+".comp.spv"));
+				}
+				catch(const std::runtime_error& err)
+				{
+					computeResult = {false, err.what()};
+				}
+			}
+		}
+		else
+		{
+			computeResult = compileShader(EShLangCompute, compute, computeBin);
+			if(std::get<0>(computeResult))
+				computeShader = createShader(computeBin);
+		}
+
+		if(!std::get<0>(computeResult))
+			return {std::get<0>(computeResult), "compute: "+std::get<1>(computeResult)};
+
+		m_computePipeline = createComputePipeline(computeShader);
+		return {true, ""};
+	}
+
 	void VulkanBackend::buildCommandBuffer(Mesh* mesh)
 	{
 		if(mesh == nullptr)
@@ -546,6 +629,19 @@ namespace vulkanbot
 		m_commandBuffer->copyImageToBuffer(m_renderImage->image.get(), vk::ImageLayout::eTransferSrcOptimal, m_outputImageBuffer.get(), regions);
 
 		m_commandBuffer->end();
+	}
+
+	void VulkanBackend::buildComputeCommandBuffer(int x, int y, int z)
+	{
+		m_computeCommandBuffer->reset();
+		m_computeCommandBuffer->begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlags()));
+
+		m_computeCommandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, m_computePipeline.get());
+		m_computeCommandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_computePipelineLayout.get(), 0,
+			{m_descriptorSet.get(), m_computeDescriptorSet.get()}, {0, 0});
+		m_computeCommandBuffer->dispatch(x, y, z);
+
+		m_computeCommandBuffer->end();
 	}
 
 	std::unique_ptr<ImageData> VulkanBackend::uploadImage(int width, int height, const std::vector<unsigned char>& data)
@@ -677,6 +773,23 @@ namespace vulkanbot
 
 		uint8_t *pData = static_cast<uint8_t *>(m_device->mapMemory(m_outputImageMemory.get(), 0, m_outputImageMemoryRequirements.size));
 		consumer(pData, m_outputImageMemoryRequirements.size, m_width, m_height, r, duration);
+		m_device->unmapMemory(m_outputImageMemory.get());
+	}
+
+	void VulkanBackend::doComputation(std::function<void(OutputStorageObject*, vk::Result, long)> consumer)
+	{
+		vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eComputeShader);
+		m_queue.submit(vk::SubmitInfo(0, nullptr, &waitDestinationStageMask, 1, &m_computeCommandBuffer.get()), m_fence.get());
+
+		auto t1 = std::chrono::high_resolution_clock::now();
+		vk::Result r = m_device->waitForFences(m_fence.get(), true, UINT64_MAX);
+		auto t2 = std::chrono::high_resolution_clock::now();
+		long duration = std::chrono::duration_cast<std::chrono::microseconds>( t2 - t1 ).count();
+
+		m_device->resetFences(m_fence.get());
+
+		OutputStorageObject *pData = static_cast<OutputStorageObject*>(m_device->mapMemory(m_outputStorageMemory.get(), 0, sizeof(OutputStorageObject)));
+		consumer(pData, r, duration);
 		m_device->unmapMemory(m_outputImageMemory.get());
 	}
 
