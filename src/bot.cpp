@@ -20,6 +20,7 @@
 #include <gif.h>
 #include "lodepng.h"
 #include "sleepy_discord/sleepy_discord.h"
+#include <glm/gtx/string_cast.hpp>
 
 using namespace vulkanbot;
 
@@ -383,7 +384,13 @@ public:
 				backend.buildComputeCommandBuffer(1, 1, 1);
 				backend.doComputation([this, message](OutputStorageObject* data, vk::Result result, long time)
 				{
-					sendMessage(message.channelID, "Computation finished in "+std::to_string(time)+" μs!```"+std::to_string(data->value)+"```");
+					std::string value =
+						"float: " + std::to_string(data->as_float) + "\n" +
+						"int  : " + std::to_string(data->as_int) + "\n" +
+						"vec4 : " + glm::to_string(data->as_vec4) + "\n" +
+						"ivec4: " + glm::to_string(data->as_ivec4) + "\n" +
+						"chars: " + data->charsToString();
+					sendMessage(message.channelID, "Computation finished in "+std::to_string(time)+" μs!```"+value+"```");
 				});
 			}
 			else

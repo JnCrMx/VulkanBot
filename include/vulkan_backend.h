@@ -41,8 +41,26 @@ namespace vulkanbot
 		float random;
 	};
 
-	struct OutputStorageObject {
-		float value;
+	union OutputStorageObject {
+		float as_float;
+		int as_int;
+		glm::vec4 as_vec4;
+		glm::ivec4 as_ivec4;
+
+		uint32_t as_uints[16];
+
+		std::string charsToString()
+		{
+			size_t len = sizeof(as_uints)/sizeof(uint32_t);
+
+			char chars[len];
+			for(size_t i=0; i<len; i++)
+			{
+				chars[i] = as_uints[i];
+			}
+
+			return std::string(chars, len);
+		}
 	};
 
 	struct ImageData {
