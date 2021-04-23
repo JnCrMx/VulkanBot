@@ -378,10 +378,42 @@ public:
 					}
 				}
 			}
+
+			std::optional<SleepyDiscord::Attachment> imageAttachment;
+			for(const SleepyDiscord::Attachment& a : message.attachments)
+			{
+				if(!imageAttachment.has_value() && a.filename.ends_with(".png"))
+					imageAttachment = a;
+			}
+
 			auto [result, error] = backend.uploadComputeShader(computeShader.value_or(computePath.value_or("base")), !computeShader.has_value());
 			if(result)
 			{
+				std::string url = "https://cdn.discordapp.com/avatars/"+message.author.ID.string()+"/"+message.author.avatar+".png";
+				if(imageAttachment.has_value())
+					url = imageAttachment->url;
+				std::vector<unsigned char> png;
+
+				CURL *curl;
+				curl = curl_easy_init();
+				curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+				curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+				curl_easy_setopt(curl, CURLOPT_WRITEDATA, &png);
+				curl_easy_perform(curl);
+				curl_easy_cleanup(curl);
+
+				std::vector<unsigned char> image;
+				unsigned int w, h;
+				lodepng::decode(image, w, h, png);
+				std::unique_ptr<ImageData> vkImage = backend.uploadImage(w, h, image);
+
 				backend.buildComputeCommandBuffer(1, 1, 1);
+
+				backend.updateUniformObject([this](UniformBufferObject* ubo){
+						ubo->time = 0.0f;
+						ubo->random = dist(e2);
+				});
+
 				backend.doComputation([this, message](OutputStorageObject* data, vk::Result result, long time)
 				{
 					std::string value =
