@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bits/stdint-uintn.h>
+#include <cctype>
 #include <functional>
 #include <tuple>
 #include <memory>
@@ -59,7 +60,9 @@ namespace vulkanbot
 				chars[i] = as_uints[i];
 			}
 
-			return std::string(chars, len);
+			std::string s(chars, len);
+			s.replace(std::remove_if(s.begin(), s.end(), []( auto const& c ) -> bool { return !std::isalnum(c) && c != 0; }), s.end(), "\0");
+			return s;
 		}
 	};
 
