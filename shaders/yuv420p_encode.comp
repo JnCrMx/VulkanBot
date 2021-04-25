@@ -1,0 +1,36 @@
+#version 450
+
+layout(binding = 0, rgba8) uniform readonly image2D inputImage;
+
+layout(binding = 1, r8) uniform writeonly image2D outputImageY;
+layout(binding = 2, r8) uniform writeonly image2D outputImageCr;
+layout(binding = 3, r8) uniform writeonly image2D outputImageCb;
+
+vec3 toYUV(vec4 rgb)
+{
+	float r = rgb.r;
+	float g = rgb.g;
+	float b = rgb.b;
+	float y  = (0.257 * r) + (0.504 * g) + (0.098 * b) + 0.0625;
+	float cr = (0.439 * r) - (0.368 * g) - (0.071 * b) + 0.5;
+	float cb = -(0.148 * r) - (0.291 * g) + (0.439 * b) + 0.5;
+	return vec3(y, cb, cr);
+}
+
+void main()
+{
+	uvec2 coord = gl_GlobalInvocationID.xy;
+
+	vec3 p00 = toYUV(imageLoad(inputImage, ivec2(coord.x*2+0, coord.y*2+0)));
+	vec3 p01 = toYUV(imageLoad(inputImage, ivec2(coord.x*2+1, coord.y*2+0)));
+	vec3 p10 = toYUV(imageLoad(inputImage, ivec2(coord.x*2+0, coord.y*2+1)));
+	vec3 p11 = toYUV(imageLoad(inputImage, ivec2(coord.x*2+1, coord.y*2+1)));
+
+	imageStore(outputImageY, ivec2(coord.x*2+0, coord.y*2+0), vec4(p00.x));
+	imageStore(outputImageY, ivec2(coord.x*2+1, coord.y*2+0), vec4(p01.x));
+	imageStore(outputImageY, ivec2(coord.x*2+0, coord.y*2+1), vec4(p10.x));
+	imageStore(outputImageY, ivec2(coord.x*2+1, coord.y*2+1), vec4(p11.x));
+
+	imageStore(outputImageCr, ivec2(coord.x, coord.y), vec4(p00.y));
+	imageStore(outputImageCb, ivec2(coord.x, coord.y), vec4(p00.z));
+}

@@ -16,7 +16,6 @@ add_executable(vulkan_bot ${sources})
 
 target_include_directories(vulkan_bot PUBLIC include/)
 target_include_directories(vulkan_bot PUBLIC external/lodepng)
-target_include_directories(vulkan_bot PUBLIC external/gif-h)
 target_include_directories(vulkan_bot PUBLIC ${CURL_INCLUDE_DIR})
 
 target_link_libraries(vulkan_bot PUBLIC ${Vulkan_LIBRARIES})
@@ -83,3 +82,7 @@ target_link_libraries(vulkan_bot PUBLIC glslang-default-resource-limits)
 target_include_directories(vulkan_bot PUBLIC external/glslang/glslang/Public)
 target_include_directories(vulkan_bot PUBLIC external/glslang/SPIRV)
 target_include_directories(vulkan_bot PUBLIC external/glslang/StandAlone)
+
+add_subdirectory(external/avcpp)
+target_link_libraries(vulkan_bot PUBLIC avcpp-static)
+target_include_directories(vulkan_bot PUBLIC ${AvCpp_SOURCE_DIR}/src)

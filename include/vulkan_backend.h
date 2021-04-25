@@ -140,7 +140,7 @@ namespace vulkanbot
 				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
 			std::tuple<bool, std::string> uploadComputeShader(const std::string compute, bool file);
 
-			void buildCommandBuffer(Mesh* mesh = nullptr);
+			void buildCommandBuffer(Mesh* mesh = nullptr, bool yuv420p = false);
 			void buildComputeCommandBuffer(int x, int y, int z);
 
 			std::unique_ptr<ImageData> uploadImage(int width, int height, const std::vector<unsigned char>& data);
@@ -151,7 +151,7 @@ namespace vulkanbot
 
 			void updateUniformObject(std::function<void(UniformBufferObject*)> updater);
 
-			void renderFrame(std::function<void(uint8_t*, vk::DeviceSize, int, int, vk::Result, long)> consumer);
+			void renderFrame(std::function<void(uint8_t*, vk::DeviceSize, int, int, vk::Result, long)> consumer, bool yuv420p = false);
 			void doComputation(std::function<void(OutputStorageObject*, vk::Result, long)> consumer);
 		private:
 			uint32_t m_width = 1024;
@@ -205,5 +205,14 @@ namespace vulkanbot
 
 			vk::UniquePipelineLayout m_computePipelineLayout;
 			vk::UniquePipeline m_computePipeline;
+
+			std::unique_ptr<ImageData> m_encodedImageY;
+			std::unique_ptr<ImageData> m_encodedImageCr;
+			std::unique_ptr<ImageData> m_encodedImageCb;
+			vk::UniqueDescriptorSetLayout m_descriptorSetLayoutEncode;
+			vk::UniqueDescriptorSet m_descriptorSetEncode;
+			vk::UniquePipelineLayout m_pipelineLayoutEncode;
+			vk::UniquePipeline m_encodePipeline;
+			vk::UniquePipeline createEncodePipeline();
 	};
 }

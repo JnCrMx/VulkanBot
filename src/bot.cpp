@@ -17,10 +17,25 @@
 #include <vulkan/vulkan.hpp>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
-#include <gif.h>
 #include "lodepng.h"
 #include "sleepy_discord/sleepy_discord.h"
 #include <glm/gtx/string_cast.hpp>
+
+#include "rational.h"
+#include "av.h"
+#include "ffmpeg.h"
+#include "codec.h"
+#include "packet.h"
+#include "videorescaler.h"
+#include "audioresampler.h"
+#include "avutils.h"
+#include "format.h"
+#include "formatcontext.h"
+#include "codeccontext.h"
+#include "timestamp.h"
+#include <libavformat/avformat.h>
+#include <libavutil/log.h>
+#include <libavutil/pixfmt.h>
 
 using namespace vulkanbot;
 
@@ -48,7 +63,7 @@ public:
 		m_height = config["height"];
 		m_maxFrames = config["maxFrames"];
 		m_defaultFrames = config["defaultFrames"];
-		m_defaultFrameDelay = config["defaultFrameDelay"];
+		m_defaultFPS = config["defaultFPS"];
 		m_defaultStart = config["defaultStart"];
 		m_defaultEnd = config["defaultEnd"];
 
@@ -265,24 +280,24 @@ public:
 						}
 					}
 					mesh = backend.uploadMesh(vertices, texCoords, normals, indices);
-					backend.buildCommandBuffer(mesh.get());
+					backend.buildCommandBuffer(mesh.get(), animated != std::string::npos);
 				}
 				else
 				{
-					backend.buildCommandBuffer();
+					backend.buildCommandBuffer(nullptr, animated != std::string::npos);
 				}
 
 				if(animated != std::string::npos)
 				{
 					int frames = m_defaultFrames;
-					int frameDelay = m_defaultFrameDelay;
+					int fps = m_defaultFPS;
 					float tStart = m_defaultStart;
 					float tEnd = m_defaultEnd;
 					try
 					{
 						std::istringstream stringstream(message.content.substr(animated+9));
 						stringstream >> frames;
-						stringstream >> frameDelay;
+						stringstream >> fps;
 						stringstream >> tStart;
 						stringstream >> tEnd;
 					}
@@ -292,8 +307,34 @@ public:
 
 					long renderTime = 0L;
 					auto t1 = std::chrono::high_resolution_clock::now();
-					GifWriter g;
-					GifBegin(&g, "/tmp/render.gif", m_width, m_height, frameDelay);
+
+					av::OutputFormat ofrmt;
+					av::FormatContext octx;
+					ofrmt.setFormat(std::string(), "/tmp/render.mp4");
+					octx.setFormat(ofrmt);
+					av::Codec ocodec = av::findEncodingCodec(ofrmt);
+					av::Stream ost = octx.addStream(ocodec);
+					av::VideoEncoderContext encoder {ost, ocodec};
+
+					av::Rational timeBase = {1, fps};
+					encoder.setWidth(m_width);
+					encoder.setHeight(m_height);
+					encoder.setTimeBase(timeBase);
+					encoder.setBitRate(1024*1024*30);
+					encoder.setGopSize(10);
+					encoder.setMaxBFrames(1);
+
+					av::PixelFormat pixelFormat("yuv420p");
+
+					encoder.setPixelFormat(pixelFormat);
+					ost.setFrameRate(timeBase);
+
+					octx.openOutput("/tmp/render.mp4");
+					encoder.open(ocodec);
+					octx.dump();
+					octx.writeHeader();
+					octx.flush();
+
 					for(int i=0; i<frames; i++)
 					{
 						backend.updateUniformObject([this, frames, tStart, tEnd, i](UniformBufferObject* ubo){
@@ -301,26 +342,46 @@ public:
 							ubo->random = dist(e2);
 						});
 
-						backend.renderFrame([frameDelay, &g, &renderTime](uint8_t* data, vk::DeviceSize size, int width, int height, vk::Result result, long time)
+						backend.renderFrame([&renderTime, pixelFormat, &encoder, &octx, timeBase, i]
+							(uint8_t* data, vk::DeviceSize size, int width, int height, vk::Result result, long time)
 						{
 							uint8_t *dataCopy = new uint8_t[size];
 							memcpy(dataCopy, data, size);
 
-							GifWriteFrame(&g, dataCopy, width, height, frameDelay);
+							av::VideoFrame frame(dataCopy, size, pixelFormat, width, height);
+							frame.setTimeBase(timeBase);
+							frame.setStreamIndex(0);
+							frame.setPictureType();
+							frame.setPts(av::Timestamp(i, timeBase));
+
+							av::Packet packet = encoder.encode(frame);
+							if(packet)
+							{
+								octx.writePacket(packet);
+							}
+
 							renderTime += time;
 
 							delete [] dataCopy;
-						});
+						}, true);
+					}
 
-						struct stat64 stat;
-						stat64("/tmp/render.gif", &stat);
-						if(stat.st_size > 7000000)
+					for(;;)
+					{
+						av::Packet packet = encoder.encode();
+						if(packet)
+						{
+							octx.writePacket(packet);
+						}
+						else
 							break;
 					}
-					GifEnd(&g);
+
+					octx.writeTrailer();
+
 					auto t2 = std::chrono::high_resolution_clock::now();
 					auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count();
-					uploadFile(message.channelID, "/tmp/render.gif", "Finished in "+std::to_string(duration)+" ms! "+
+					uploadFile(message.channelID, "/tmp/render.mp4", "Finished in "+std::to_string(duration)+" ms! "+
 						"Rendering took "+std::to_string(renderTime/1000)+" ms!");
 				}
 				else
@@ -441,7 +502,7 @@ private:
 	int m_height;
 
 	int m_defaultFrames;
-	int m_defaultFrameDelay;
+	int m_defaultFPS;
 
 	float m_defaultStart;
 	float m_defaultEnd;
@@ -461,6 +522,8 @@ void INThandler(int sig)
 int main()
 {
 	std::signal(SIGINT, INThandler);
+	av::init();
+	av::setFFmpegLoggingLevel(AV_LOG_ERROR);
 
 	std::ifstream config("config.json");
 	nlohmann::json j;
