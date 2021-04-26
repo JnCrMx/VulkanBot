@@ -66,6 +66,8 @@ public:
 		m_defaultFPS = config["defaultFPS"];
 		m_defaultStart = config["defaultStart"];
 		m_defaultEnd = config["defaultEnd"];
+		m_bitrate = config["bitrate"];
+		m_maxBitrate = config["maxBitrate"];
 
 		e2 = std::mt19937(rd());
 		dist = std::uniform_real_distribution<>(0.0, 1.0);
@@ -293,6 +295,7 @@ public:
 					int fps = m_defaultFPS;
 					float tStart = m_defaultStart;
 					float tEnd = m_defaultEnd;
+					long bitrate = m_bitrate;
 					try
 					{
 						std::istringstream stringstream(message.content.substr(animated+9));
@@ -300,10 +303,30 @@ public:
 						stringstream >> fps;
 						stringstream >> tStart;
 						stringstream >> tEnd;
+
+						std::string s_bitrate;
+						stringstream >> s_bitrate;
+						std::stringstream s(s_bitrate.substr(0, s_bitrate.size() - (std::isalpha(s_bitrate.back()) ? 1 : 0)));
+						s >> bitrate;
+						switch(s_bitrate.back())
+						{
+							case 'k':
+							case 'K':
+								bitrate *= 1000;
+								break;
+							case 'm':
+							case 'M':
+								bitrate *= 1000000;
+								break;
+							default:
+								break;
+						}
 					}
 					catch(const std::out_of_range& ex) {}
 					if(frames > m_maxFrames)
 						frames = m_maxFrames;
+					if(bitrate > m_maxBitrate)
+						bitrate = m_maxBitrate;
 
 					long renderTime = 0L;
 					auto t1 = std::chrono::high_resolution_clock::now();
@@ -320,7 +343,7 @@ public:
 					encoder.setWidth(m_width);
 					encoder.setHeight(m_height);
 					encoder.setTimeBase(timeBase);
-					encoder.setBitRate(1024*1024*30);
+					encoder.setBitRate(bitrate);
 					encoder.setGopSize(10);
 					encoder.setMaxBFrames(1);
 
@@ -508,6 +531,8 @@ private:
 	float m_defaultEnd;
 
 	int m_maxFrames;
+	long m_bitrate;
+	long m_maxBitrate;
 };
 
 static MyClientClass* client;
