@@ -2,9 +2,12 @@
 #include "sleepy_discord/client.h"
 #include "vulkan_backend.h"
 #include <bits/stdint-uintn.h>
+#include <cctype>
+#include <filesystem>
 #include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <ratio>
@@ -404,8 +407,28 @@ public:
 
 					auto t2 = std::chrono::high_resolution_clock::now();
 					auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count();
-					uploadFile(message.channelID, "/tmp/render.mp4", "Finished in "+std::to_string(duration)+" ms! "+
-						"Rendering took "+std::to_string(renderTime/1000)+" ms!");
+
+					try
+					{
+						uploadFile(message.channelID, "/tmp/render.mp4", "Finished in "+std::to_string(duration)+" ms! "+
+							"Rendering took "+std::to_string(renderTime/1000)+" ms!");
+					}
+					catch(const SleepyDiscord::ErrorCode& error)
+					{
+						// We could do this before trying to upload, but as there is no way to
+						// safely know the upload limit, I prefer to just try to upload the file.
+						auto size = std::filesystem::file_size("/tmp/render.mp4");
+
+						std::stringstream stream;
+						stream 	<< "Finished in " << duration << " ms! "
+								<< "Rendering took " << (renderTime/1000) << " ms!\n"
+								<< "**Upload failed with error code ``" << error << "``!** "
+								<< "File size is " << std::fixed << std::setprecision(2) << (size / 1000000.0) << " MB!";
+						if(size > 8000000) // here it is fine to just guess the limit
+							stream << " Maybe try a lower bitrate?";
+
+						sendMessage(message.channelID, stream.str());
+					}
 				}
 				else
 				{
