@@ -31,6 +31,6 @@ void main()
 	imageStore(outputImageY, ivec2(coord.x*2+0, coord.y*2+1), vec4(p10.x));
 	imageStore(outputImageY, ivec2(coord.x*2+1, coord.y*2+1), vec4(p11.x));
 
-	imageStore(outputImageCr, ivec2(coord.x, coord.y), vec4(p00.y));
-	imageStore(outputImageCb, ivec2(coord.x, coord.y), vec4(p00.z));
+	imageStore(outputImageCr, ivec2(coord.x, coord.y), vec4((p00.y + p01.y + p10.y + p11.y)/4.0));
+	imageStore(outputImageCb, ivec2(coord.x, coord.y), vec4((p00.z + p01.z + p10.z + p11.z)/4.0));
 }
