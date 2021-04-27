@@ -1,5 +1,6 @@
 #include "sleepy_discord/attachment.h"
 #include "sleepy_discord/client.h"
+#include "sleepy_discord/message.h"
 #include "vulkan_backend.h"
 #include <bits/stdint-uintn.h>
 #include <cctype>
@@ -73,6 +74,9 @@ public:
 		m_defaultStart = config["video"]["default"]["time"]["start"];
 		m_defaultEnd = config["video"]["default"]["time"]["end"];
 		m_bitrate = config["video"]["default"]["bitrate"];
+
+		m_renderProgress = config["video"]["renderprogress"]["enable"];
+		m_renderProgressStepSize = config["video"]["renderprogress"]["stepSize"];
 
 		e2 = std::mt19937(rd());
 		dist = std::uniform_real_distribution<>(0.0, 1.0);
@@ -396,8 +400,27 @@ public:
 					octx.writeHeader();
 					octx.flush();
 
+					SleepyDiscord::Message progressMessage;
+					if(m_renderProgress)
+					{
+						progressMessage = sendMessage(message.channelID, "Rendering... 0% (frame 0/"+std::to_string(frames)+")").cast();
+					}
+					int lastPercent = 0;
 					for(int i=0; i<frames; i++)
 					{
+						if(m_renderProgress)
+						{
+							int percent = ((i+1)*100/frames);
+							if(percent >= (lastPercent + m_renderProgressStepSize)) // only report every n% to avoid rate limit
+							{
+								lastPercent = percent;
+								try
+								{
+									editMessage(progressMessage, "Rendering... "+std::to_string(percent)+"% (frame "+std::to_string(i+1)+"/"+std::to_string(frames)+")");
+								}
+								catch(const SleepyDiscord::ErrorCode & ignored) {}
+							}
+						}
 						backend.updateUniformObject([this, frames, tStart, tEnd, i](UniformBufferObject* ubo){
 							ubo->time = ((tEnd-tStart)/frames)*i + tStart;
 							ubo->random = dist(e2);
@@ -463,6 +486,14 @@ public:
 							stream << " Maybe try a lower bitrate?";
 
 						sendMessage(message.channelID, stream.str());
+					}
+					if(m_renderProgress)
+					{
+						try
+						{
+							deleteMessage(progressMessage.channelID, progressMessage.ID);
+						}
+						catch(const SleepyDiscord::ErrorCode & ignored) {}
 					}
 				}
 				else
@@ -578,6 +609,9 @@ private:
 	std::random_device rd;
 	std::mt19937 e2;
 	std::uniform_real_distribution<> dist;
+
+	bool m_renderProgress;
+	int m_renderProgressStepSize;
 
 	int m_width;
 	int m_height;
