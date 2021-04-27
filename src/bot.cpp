@@ -62,21 +62,56 @@ public:
 	using SleepyDiscord::DiscordClient::DiscordClient;
 	void initVulkan(nlohmann::json config)
 	{
-		m_width = config["width"];
-		m_height = config["height"];
-		m_maxFrames = config["maxFrames"];
-		m_defaultFrames = config["defaultFrames"];
-		m_defaultFPS = config["defaultFPS"];
-		m_defaultStart = config["defaultStart"];
-		m_defaultEnd = config["defaultEnd"];
-		m_bitrate = config["bitrate"];
-		m_maxBitrate = config["maxBitrate"];
+		m_width = config["image"]["width"];
+		m_height = config["image"]["height"];
+
+		m_maxFrames = config["video"]["max"]["frames"];
+		m_maxBitrate = config["video"]["max"]["bitrate"];
+
+		m_defaultFrames = config["video"]["default"]["frames"];
+		m_defaultFPS = config["video"]["default"]["fps"];
+		m_defaultStart = config["video"]["default"]["time"]["start"];
+		m_defaultEnd = config["video"]["default"]["time"]["end"];
+		m_bitrate = config["video"]["default"]["bitrate"];
 
 		e2 = std::mt19937(rd());
 		dist = std::uniform_real_distribution<>(0.0, 1.0);
 
 		curl_global_init(CURL_GLOBAL_ALL);
-		backend.initVulkan(m_width, m_height);
+
+		bool vulkanValidate = false;
+		int vulkanDebugSeverity = 0;
+		int vulkanDebugType = 0;
+		int avLogLevel = AV_LOG_ERROR;
+
+		if(config.contains("debug"))
+		{
+			nlohmann::json debugStuff = config["debug"];
+			if(debugStuff.contains("vulkan"))
+			{
+				vulkanValidate = debugStuff["vulkan"].contains("validation") ? (bool)debugStuff["vulkan"]["validation"] : false;
+				vulkanDebugSeverity = debugStuff["vulkan"].contains("severity") ? (int)debugStuff["vulkan"]["severity"] :
+					((uint32_t)vk::DebugUtilsMessageSeverityFlagsEXT(
+						vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+						vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo |
+						vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+						vk::DebugUtilsMessageSeverityFlagBitsEXT::eError));
+				vulkanDebugType = debugStuff["vulkan"].contains("type") ? (int)debugStuff["vulkan"]["type"] :
+					((uint32_t)vk::DebugUtilsMessageTypeFlagsEXT(
+						vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation));
+			}
+			if(debugStuff.contains("av"))
+			{
+				if(debugStuff["av"].contains("verbose") && debugStuff["av"]["verbose"])
+					avLogLevel = AV_LOG_VERBOSE;
+				if(debugStuff["av"].contains("logLevel"))
+					avLogLevel = debugStuff["av"]["logLevel"];
+			}
+		}
+		av::init();
+		av::setFFmpegLoggingLevel(avLogLevel);
+
+		backend.initVulkan(m_width, m_height, vulkanValidate, vulkanDebugSeverity, vulkanDebugType);
 	}
 
 	void onMessage(SleepyDiscord::Message message) override
@@ -570,14 +605,12 @@ void INThandler(int sig)
 int main()
 {
 	std::signal(SIGINT, INThandler);
-	av::init();
-	av::setFFmpegLoggingLevel(AV_LOG_ERROR);
 
 	std::ifstream config("config.json");
 	nlohmann::json j;
 	config >> j;
 
-	client = new MyClientClass(j["token"], SleepyDiscord::USER_CONTROLED_THREADS);
+	client = new MyClientClass(j["discord"]["token"], SleepyDiscord::USER_CONTROLED_THREADS);
 	client->initVulkan(j);
 	client->run();
 

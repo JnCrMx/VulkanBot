@@ -140,14 +140,43 @@ namespace vulkanbot
 		}
 	}
 
-	void VulkanBackend::initVulkan(int width, int height)
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT messageType,
+		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+		void* pUserData)
+	{
+		vk::DebugUtilsMessageSeverityFlagBitsEXT severity = (vk::DebugUtilsMessageSeverityFlagBitsEXT) messageSeverity;
+		vk::DebugUtilsMessageTypeFlagsEXT type(messageType);
+
+		std::cout << "[Vulkan: " << vk::to_string(type) << " " << vk::to_string(severity) << "]: " << pCallbackData->pMessage << std::endl;
+		return VK_FALSE;
+	}
+
+	void VulkanBackend::initVulkan(int width, int height, bool validation, int debugSeverity, int debugType)
 	{
 		m_width = static_cast<uint32_t>(width);
 		m_height = static_cast<uint32_t>(height);
 
 		vk::ApplicationInfo applicationInfo("VulkanBot", 1, "VulkanBot", 1, VK_API_VERSION_1_1);
-		vk::InstanceCreateInfo instanceCreateInfo({}, &applicationInfo);
+
+		std::vector<const char*> layers;
+		std::vector<const char*> extensions;
+		if(validation)
+		{
+			layers.push_back("VK_LAYER_KHRONOS_validation");
+			extensions.push_back("VK_EXT_debug_utils");
+		}
+		vk::InstanceCreateInfo instanceCreateInfo({}, &applicationInfo, layers, extensions);
 		m_instance = vk::createInstanceUnique(instanceCreateInfo);
+
+		if(validation)
+		{
+			m_dispatch = vk::DispatchLoaderDynamic(m_instance.get(), vkGetInstanceProcAddr);
+			m_debugMessenger = m_instance->createDebugUtilsMessengerEXTUnique(vk::DebugUtilsMessengerCreateInfoEXT({},
+				vk::DebugUtilsMessageSeverityFlagsEXT(debugSeverity), vk::DebugUtilsMessageTypeFlagsEXT(debugType),
+				&debugCallback), nullptr, m_dispatch);
+		}
 
 		m_physicalDevice = m_instance->enumeratePhysicalDevices().front();
 		std::cout << "Using Vulkan device " << m_physicalDevice.getProperties().deviceName << std::endl;
@@ -171,7 +200,7 @@ namespace vulkanbot
 		float queuePriority = 0.0f;
 		vk::DeviceQueueCreateInfo deviceQueueCreateInfo(
 			vk::DeviceQueueCreateFlags(), static_cast<uint32_t>(graphicsQueueFamilyIndex), 1, &queuePriority);
-		m_device = m_physicalDevice.createDeviceUnique(vk::DeviceCreateInfo(vk::DeviceCreateFlags(), deviceQueueCreateInfo));
+		m_device = m_physicalDevice.createDeviceUnique(vk::DeviceCreateInfo(vk::DeviceCreateFlags(), deviceQueueCreateInfo, layers));
 
 		m_commandPool = m_device->createCommandPoolUnique(
 			vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eResetCommandBuffer, graphicsQueueFamilyIndex));

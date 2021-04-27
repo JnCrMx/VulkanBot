@@ -134,7 +134,7 @@ namespace vulkanbot
 		public:
 			~VulkanBackend();
 
-			void initVulkan(int width, int height);
+			void initVulkan(int width, int height, bool validation = false, int debugSeverity = 0, int debugType = 0);
 
 			std::tuple<bool, std::string> uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile,
 				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
@@ -164,6 +164,9 @@ namespace vulkanbot
 			vk::UniquePipeline createComputePipeline(vk::UniqueShaderModule& computeShader);
 
 			vk::UniqueInstance m_instance;
+			vk::DispatchLoaderDynamic m_dispatch;
+			vk::UniqueHandle<vk::DebugUtilsMessengerEXT, vk::DispatchLoaderDynamic> m_debugMessenger;
+
 			vk::PhysicalDevice m_physicalDevice;
 			vk::UniqueDevice m_device;
 			vk::Queue m_queue;
