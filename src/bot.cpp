@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
+#include <ios>
 #include <iostream>
 #include <memory>
 #include <ratio>
@@ -76,7 +77,7 @@ public:
 		m_bitrate = config["video"]["default"]["bitrate"];
 
 		m_renderProgress = config["video"]["renderprogress"]["enable"];
-		m_renderProgressStepSize = config["video"]["renderprogress"]["stepSize"];
+		m_renderProgressDelay = config["video"]["renderprogress"]["delay"];
 
 		e2 = std::mt19937(rd());
 		dist = std::uniform_real_distribution<>(0.0, 1.0);
@@ -403,20 +404,25 @@ public:
 					SleepyDiscord::Message progressMessage;
 					if(m_renderProgress)
 					{
-						progressMessage = sendMessage(message.channelID, "Rendering... 0% (frame 0/"+std::to_string(frames)+")").cast();
+						progressMessage = sendMessage(message.channelID, "Rendering... 0.00% (frame 0/"+std::to_string(frames)+")").cast();
 					}
-					int lastPercent = 0;
+
+					auto lastProgress = std::chrono::time_point<std::chrono::high_resolution_clock>();
 					for(int i=0; i<frames; i++)
 					{
 						if(m_renderProgress)
 						{
-							int percent = ((i+1)*100/frames);
-							if(percent >= (lastPercent + m_renderProgressStepSize)) // only report every n% to avoid rate limit
+							double percent = ((i+1)*100.0)/frames;
+							auto now = std::chrono::high_resolution_clock::now();
+							// only report progress every n ms to avoid rate limit
+							if(std::chrono::duration_cast<std::chrono::milliseconds>(now - lastProgress).count() >= m_renderProgressDelay)
 							{
-								lastPercent = percent;
+								lastProgress = now;
+								std::stringstream str;
+								str << "Rendering... " << std::fixed << std::setprecision(2) << percent << "% (frame " << (i+1) << "/" << frames << ")";
 								try
 								{
-									editMessage(progressMessage, "Rendering... "+std::to_string(percent)+"% (frame "+std::to_string(i+1)+"/"+std::to_string(frames)+")");
+									editMessage(progressMessage, str.str());
 								}
 								catch(const SleepyDiscord::ErrorCode & ignored) {}
 							}
@@ -462,6 +468,16 @@ public:
 					}
 
 					octx.writeTrailer();
+
+					{
+						std::stringstream str;
+						str << "Rendering... " << std::fixed << std::setprecision(2) << 100.0 << "% (frame " << frames << "/" << frames << ") Done!";
+						try
+						{
+							editMessage(progressMessage, str.str());
+						}
+						catch(const SleepyDiscord::ErrorCode & ignored) {}
+					}
 
 					auto t2 = std::chrono::high_resolution_clock::now();
 					auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count();
@@ -611,7 +627,7 @@ private:
 	std::uniform_real_distribution<> dist;
 
 	bool m_renderProgress;
-	int m_renderProgressStepSize;
+	int m_renderProgressDelay;
 
 	int m_width;
 	int m_height;

@@ -22,7 +22,7 @@
 		},
 		"renderprogress": {
 			"enable": true,
-			"stepSize": 10
+			"delay": 2500
 		}
 	},
 	"debug": {
