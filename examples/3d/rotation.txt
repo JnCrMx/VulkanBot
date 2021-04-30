@@ -1,0 +1,36 @@
+vert```glsl
+#version 450
+
+layout(binding = 1) uniform UBO
+{
+	float time;
+	float random;
+} constants;
+layout(location = 0) in vec3 inPosition;
+layout(location = 0) out vec2 outCoord;
+
+void main()
+{
+	float ax = constants.time;
+	float ay = constants.time;
+	float az = constants.time;
+
+	mat3 mx = mat3(1, 0, 0, 0, cos(ax), sin(ax), 0, -sin(ax), cos(ax));
+	mat3 my = mat3(cos(ay), 0, -sin(ay), 0, 1, 0, sin(ay), 0, cos(ay));
+	mat3 mz = mat3(cos(az), sin(az), 0, -sin(az), cos(az), 0, 0, 0, 1);
+	mat3 rotation = mx * my * mz;
+
+	vec3 point = vec3(inPosition.xy, sin(inPosition.x*5)*0.1);
+	point = rotation * point;
+
+	mat4 projection = mat4(  2.414,  0.000,  0.000,  0.000,
+							 0.000,  2.414,  0.000,  0.000,
+							 0.000,  0.000, -1.020,  4.899,
+							 0.000,  0.000, -1.000,  5.000);
+	vec4 projected = vec4(point, 1.0) * projection;
+
+	gl_Position = projected;
+	outCoord = (inPosition.xy + vec2(1.0)) / 2.0;
+}
+```
+animated 120 60 0.0 6.28318530717958647693
