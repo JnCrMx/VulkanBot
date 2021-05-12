@@ -11,6 +11,7 @@ find_package(CURL REQUIRED)
 
 file(GLOB_RECURSE sources src/*.cpp src/*.h external/lodepng/lodepng.cpp)
 file(GLOB_RECURSE shaders shaders/*.vert shaders/*.frag shaders/*.comp)
+file(GLOB_RECURSE shader_includes shader_include/*.glsl)
 
 add_executable(vulkan_bot ${sources})
 
@@ -72,6 +73,11 @@ endfunction(add_shader)
 
 foreach(shader ${shaders})
 	add_shader(vulkan_bot ${shader})
+endforeach()
+
+foreach(shader_include ${shader_includes})
+	file(RELATIVE_PATH rel ${CMAKE_CURRENT_SOURCE_DIR} ${shader_include})
+	configure_file(${rel} ${rel} COPYONLY)
 endforeach()
 
 add_subdirectory(external/glslang)

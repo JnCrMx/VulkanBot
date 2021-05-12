@@ -1,9 +1,9 @@
 vertfile``base2``
 ```glsl
 /*
-A fragment shader that visualizes the sine function in the complex plane.
+A fragment shader that visualizes the logarithmic function in the complex plane.
 It is expanded bit by bit from its Taylor series to generate an animation.
-See https://en.wikipedia.org/wiki/Sine#Series_definition for more information.
+See https://en.wikipedia.org/wiki/Taylor_series#Natural_logarithm for more information.
 */
 #version 450
 
@@ -19,24 +19,23 @@ layout(binding = 1) uniform UBO
 	float random; // individual random value between 0.0 and 1.0 for each frame (unused)
 } constants;
 
-
-// Taylor series expansion of sin(x) until from n=0 to n=steps-1
-vec2 csin(const in vec2 x, const in int steps)
+// Taylor series expansion of ln(x+1) from n=1 to n=steps
+vec2 cln(const in vec2 x, const in int steps)
 {
 	vec2 res = vec2(0.0);
-	for(int i=0; i<steps; i++)
+	for(int i=1; i<=steps; i++)
 	{
-		res += (i%2==0?1:-1) * cfpow(x, 2*i+1);
+		res += (i%2==0?-1.0:1.0) * (cpow(x, i)/float(i));
 	}
 	return res;
 }
 
 void main()
 {
-	vec2 x = inCoord*pow(constants.time, 0.75)*2; // slowly zoom out
-	vec2 y = csin(x, int(constants.time));
+	vec2 x = inCoord*2.5; // no zoom here :( all the action is happening around the center
+	vec2 y = cln(x, int(constants.time));
 
 	outColor = vec4(ccolor(y), 1.0);
 }
 ```
-animated 300 30 1.0 11.0 5M
+animated 300 10 1.0 31.0 1M

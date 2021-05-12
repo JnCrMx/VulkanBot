@@ -1,5 +1,5 @@
 #include "vulkan_backend.h"
-#include "ShaderLang.h"
+#include "LimitedIncluder.h"
 
 #include <array>
 #include <bits/stdint-uintn.h>
@@ -531,6 +531,8 @@ namespace vulkanbot
 
 	std::tuple<bool, std::string> compileShader(EShLanguage stage, std::string glslCode, std::vector<unsigned int>& shaderCode)
 	{
+		vulkan_bot::LimitedIncluder includer("shader_include");
+
 		const char * shaderStrings[1];
 		shaderStrings[0] = glslCode.data();
 
@@ -543,7 +545,7 @@ namespace vulkanbot
 		shader.setSourceEntryPoint("main");
 
 		EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
-		if(!shader.parse(&glslang::DefaultTBuiltInResource, 100, false, messages))
+		if(!shader.parse(&glslang::DefaultTBuiltInResource, 100, false, messages, includer))
 		{
 			return {false, std::string(shader.getInfoLog())};
 		}
