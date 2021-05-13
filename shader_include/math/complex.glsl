@@ -1,20 +1,27 @@
 #include "math/constants.glsl"
 
 // computes the color to visualize the complex value
-vec3 ccolor(vec2 y)
+vec3 ccolor(vec2 y, bool checkerboard, bool origin, bool unit_circle)
 {
-	if(distance(y, vec2(0.0)) < 0.25)
+	if(origin &&
+		distance(y, vec2(0.0)) <= 0.1)
 	{
-		return vec3(1.0);
+		return vec3(y.x*y.y > 0.0 ? 1.0 : 0.0);
 	}
 
 	float dc = distance(y, vec2(0.0));
-	if(distance(1.0, dc) < 0.1 && abs(y.x) > 0.1 && abs(y.y) > 0.1)
+	if(unit_circle &&
+		distance(1.0, dc) <= 0.1 &&
+		distance(y, vec2(+1.0,  0.0)) > 0.1 &&
+		distance(y, vec2(-1.0,  0.0)) > 0.1 &&
+		distance(y, vec2( 0.0, +1.0)) > 0.1 &&
+		distance(y, vec2( 0.0, -1.0)) > 0.1)
 	{
-		return vec3(dc<1.0 ? 0.5 : 0.7);
+		return vec3(dc<1.0 ? 0.5 : 0.75);
 	}
 
-	if(int(floor(y.x*10))%2 == 0 ^^ int(floor(y.y*10))%2 == 0)
+	if(checkerboard &&
+		( int(floor(y.x*10))%2 == 1 ^^ int(floor(y.y*10))%2 == 0 ) )
 	{
 		return vec3(0.0);
 	}
@@ -25,6 +32,11 @@ vec3 ccolor(vec2 y)
 	vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
 	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
 	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 ccolor(vec2 y)
+{
+	return ccolor(y, true, true, true);
 }
 
 // product of two complex numbers
