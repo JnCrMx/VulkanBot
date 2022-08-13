@@ -25,8 +25,11 @@ target_link_libraries(vulkan_bot PUBLIC ${CURL_LIBRARIES})
 target_include_directories(vulkan_bot PUBLIC ${Vulkan_INCLUDE_DIRS})
 target_include_directories(vulkan_bot PUBLIC ${GLM_INCLUDE_DIRS})
 
-add_subdirectory(external/sleepy-discord)
-target_link_libraries(vulkan_bot PUBLIC sleepy-discord)
+#add_subdirectory(external/dpp)
+find_package(PkgConfig)
+pkg_check_modules(DPP REQUIRED dpp)
+target_link_libraries(vulkan_bot PUBLIC ${DPP_LIBRARIES})
+target_include_directories(vulkan_bot PUBLIC ${DPP_INCLUDE_DIRS})
 
 set(JSON_BuildTests OFF CACHE INTERNAL "")
 add_subdirectory(external/json)

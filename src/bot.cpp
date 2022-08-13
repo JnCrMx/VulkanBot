@@ -1,7 +1,3 @@
-#include "sleepy_discord/attachment.h"
-#include "sleepy_discord/client.h"
-#include "sleepy_discord/message.h"
-#include "vulkan_backend.h"
 #include <bits/stdint-uintn.h>
 #include <cctype>
 #include <filesystem>
@@ -15,6 +11,7 @@
 #include <ratio>
 #include <sstream>
 #include <string>
+#include <random>
 #include <sys/stat.h>
 #include <vector>
 #include <optional>
@@ -23,8 +20,9 @@
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include "lodepng.h"
-#include "sleepy_discord/sleepy_discord.h"
 #include <glm/gtx/string_cast.hpp>
+
+#include <dpp/dpp.h>
 
 #include "rational.h"
 #include "av.h"
@@ -42,6 +40,8 @@
 #include <libavutil/log.h>
 #include <libavutil/pixfmt.h>
 
+#include "vulkan_backend.h"
+
 using namespace vulkanbot;
 
 static size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -58,10 +58,9 @@ static size_t WriteStringCallback(void *contents, size_t size, size_t nmemb, voi
 	return size * nmemb;
 }
 
-class MyClientClass : public SleepyDiscord::DiscordClient
+class VulkanBot
 {
 public:
-	using SleepyDiscord::DiscordClient::DiscordClient;
 	void initVulkan(nlohmann::json config)
 	{
 		m_width = config["image"]["width"];
@@ -119,12 +118,13 @@ public:
 		backend.initVulkan(m_width, m_height, vulkanValidate, vulkanDebugSeverity, vulkanDebugType);
 	}
 
-	void onMessage(SleepyDiscord::Message message) override
+	void onMessage(dpp::cluster& bot, const dpp::message_create_t& event)
 	{
-		if(message.startsWith("```glsl") || message.startsWith("vert```glsl") || message.startsWith("frag```glsl") ||
-			message.startsWith("file``") || message.startsWith("vertfile``") || message.startsWith("fragfile``"))
+		std::string message = event.msg.content;
+		if(message.starts_with("```glsl") || message.starts_with("vert```glsl") || message.starts_with("frag```glsl") ||
+			message.starts_with("file``") || message.starts_with("vertfile``") || message.starts_with("fragfile``"))
 		{
-			sendTyping(message.channelID);
+			bot.channel_typing(event.msg.channel_id);
 
 			std::optional<std::string> vertexShader;
 			std::optional<std::string> fragmentShader;
@@ -132,40 +132,40 @@ public:
 			std::optional<std::string> fragmentPath;
 
 			std::string::size_type end = 0;
-			auto vertexStart = message.content.find("vert```glsl");
+			auto vertexStart = message.find("vert```glsl");
 			if(vertexStart != std::string::npos)
 			{
 				vertexStart += 11 + 1;
-				auto vertexEnd = message.content.find("```", vertexStart);
+				auto vertexEnd = message.find("```", vertexStart);
 				if(vertexEnd != std::string::npos)
 				{
-					vertexShader = message.content.substr(vertexStart, vertexEnd - vertexStart);
+					vertexShader = message.substr(vertexStart, vertexEnd - vertexStart);
 					if(vertexEnd > end)
 						end = vertexEnd + 3;
 				}
 			}
 
-			auto fragmentStart = message.content.find("frag```glsl");
+			auto fragmentStart = message.find("frag```glsl");
 			if(fragmentStart != std::string::npos)
 			{
 				fragmentStart += 11 + 1;
-				auto fragmentEnd = message.content.find("```", fragmentStart);
+				auto fragmentEnd = message.find("```", fragmentStart);
 				if(fragmentEnd != std::string::npos)
 				{
-					fragmentShader = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
+					fragmentShader = message.substr(fragmentStart, fragmentEnd - fragmentStart);
 					if(fragmentEnd > end)
 						end = fragmentEnd + 3;
 				}
 			}
 			if(!fragmentShader.has_value())
 			{
-				fragmentStart = message.content.find("```glsl");
+				fragmentStart = message.find("```glsl");
 				if(fragmentStart != std::string::npos && (fragmentStart += 7 + 1) != vertexStart)
 				{
-					auto fragmentEnd = message.content.find("```", fragmentStart);
+					auto fragmentEnd = message.find("```", fragmentStart);
 					if(fragmentEnd != std::string::npos)
 					{
-						fragmentShader = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
+						fragmentShader = message.substr(fragmentStart, fragmentEnd - fragmentStart);
 						if(fragmentEnd > end)
 							end = fragmentEnd + 3;
 					}
@@ -174,14 +174,14 @@ public:
 
 			if(!vertexShader.has_value())
 			{
-				vertexStart = message.content.find("vertfile``");
+				vertexStart = message.find("vertfile``");
 				if(vertexStart != std::string::npos)
 				{
 					vertexStart += 10;
-					auto vertexEnd = message.content.find("``", vertexStart);
+					auto vertexEnd = message.find("``", vertexStart);
 					if(vertexEnd != std::string::npos)
 					{
-						vertexPath = message.content.substr(vertexStart, vertexEnd - vertexStart);
+						vertexPath = message.substr(vertexStart, vertexEnd - vertexStart);
 						if(vertexEnd > end)
 							end = vertexEnd + 2;
 					}
@@ -189,27 +189,27 @@ public:
 			}
 			if(!fragmentShader.has_value())
 			{
-				fragmentStart = message.content.find("fragfile``");
+				fragmentStart = message.find("fragfile``");
 				if(fragmentStart != std::string::npos)
 				{
 					fragmentStart += 10;
-					auto fragmentEnd = message.content.find("``", fragmentStart);
+					auto fragmentEnd = message.find("``", fragmentStart);
 					if(fragmentEnd != std::string::npos)
 					{
-						fragmentPath = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
+						fragmentPath = message.substr(fragmentStart, fragmentEnd - fragmentStart);
 						if(fragmentEnd > end)
 							end = fragmentEnd + 2;
 					}
 				}
 				if(!fragmentPath.has_value())
 				{
-					fragmentStart = message.content.find("file``");
+					fragmentStart = message.find("file``");
 					if(fragmentStart != std::string::npos && (fragmentStart += 6) != vertexStart)
 					{
-						auto fragmentEnd = message.content.find("``", fragmentStart);
+						auto fragmentEnd = message.find("``", fragmentStart);
 						if(fragmentEnd != std::string::npos)
 						{
-							fragmentPath = message.content.substr(fragmentStart, fragmentEnd - fragmentStart);
+							fragmentPath = message.substr(fragmentStart, fragmentEnd - fragmentStart);
 							if(fragmentEnd > end)
 								end = fragmentEnd + 2;
 						}
@@ -217,9 +217,9 @@ public:
 				}
 			}
 
-			std::optional<SleepyDiscord::Attachment> imageAttachment;
-			std::optional<SleepyDiscord::Attachment> meshAttachment;
-			for(const SleepyDiscord::Attachment& a : message.attachments)
+			std::optional<dpp::attachment> imageAttachment;
+			std::optional<dpp::attachment> meshAttachment;
+			for(const auto& a : event.msg.attachments)
 			{
 				if(!imageAttachment.has_value() && a.filename.ends_with(".png"))
 					imageAttachment = a;
@@ -227,9 +227,9 @@ public:
 					meshAttachment = a;
 			}
 
-			auto animated = message.content.find("animated", end);
-			bool nocull = message.content.find("nocull", end) != std::string::npos;
-			bool nodepth = message.content.find("nodepth", end) != std::string::npos;
+			auto animated = message.find("animated", end);
+			bool nocull = message.find("nocull", end) != std::string::npos;
+			bool nodepth = message.find("nodepth", end) != std::string::npos;
 
 			auto [result, error] = backend.uploadShaderMix(vertexShader.value_or(vertexPath.value_or("base")), !vertexShader.has_value(),
 				fragmentShader.value_or(fragmentPath.value_or("base")), !fragmentShader.has_value(),
@@ -237,7 +237,7 @@ public:
 
 			if(result)
 			{
-				std::string url = "https://cdn.discordapp.com/avatars/"+message.author.ID.string()+"/"+message.author.avatar+".png";
+				std::string url = event.msg.author.get_avatar_url();
 				if(imageAttachment.has_value())
 					url = imageAttachment->url;
 				std::vector<unsigned char> png;
@@ -341,7 +341,7 @@ public:
 					long bitrate = m_bitrate;
 					try
 					{
-						std::istringstream stringstream(message.content.substr(animated+9));
+						std::istringstream stringstream(message.substr(animated+9));
 						stringstream >> frames;
 						stringstream >> fps;
 						stringstream >> tStart;
@@ -401,10 +401,10 @@ public:
 					octx.writeHeader();
 					octx.flush();
 
-					SleepyDiscord::Message progressMessage;
+					dpp::message progressMessage(event.msg.channel_id, "Rendering... 0.00% (frame 0/"+std::to_string(frames)+")");
 					if(m_renderProgress)
 					{
-						progressMessage = sendMessage(message.channelID, "Rendering... 0.00% (frame 0/"+std::to_string(frames)+")").cast();
+						progressMessage = bot.message_create_sync(progressMessage);
 					}
 
 					auto lastProgress = std::chrono::time_point<std::chrono::high_resolution_clock>();
@@ -420,11 +420,8 @@ public:
 								lastProgress = now;
 								std::stringstream str;
 								str << "Rendering... " << std::fixed << std::setprecision(2) << percent << "% (frame " << (i+1) << "/" << frames << ")";
-								try
-								{
-									editMessage(progressMessage, str.str());
-								}
-								catch(const SleepyDiscord::ErrorCode & ignored) {}
+								progressMessage.set_content(str.str());
+								bot.message_edit(progressMessage);
 							}
 						}
 						backend.updateUniformObject([this, frames, tStart, tEnd, i](UniformBufferObject* ubo){
@@ -472,17 +469,14 @@ public:
 					{
 						std::stringstream str;
 						str << "Rendering... " << std::fixed << std::setprecision(2) << 100.0 << "% (frame " << frames << "/" << frames << ") Done!";
-						try
-						{
-							editMessage(progressMessage, str.str());
-						}
-						catch(const SleepyDiscord::ErrorCode & ignored) {}
+						progressMessage.set_content(str.str());
+						bot.message_edit(progressMessage);
 					}
 
 					auto t2 = std::chrono::high_resolution_clock::now();
 					auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count();
 
-					try
+					/*try
 					{
 						uploadFile(message.channelID, "/tmp/render.mp4", "Finished in "+std::to_string(duration)+" ms! "+
 							"Rendering took "+std::to_string(renderTime/1000)+" ms!");
@@ -502,14 +496,10 @@ public:
 							stream << " Maybe try a lower bitrate?";
 
 						sendMessage(message.channelID, stream.str());
-					}
+					}*/
 					if(m_renderProgress)
 					{
-						try
-						{
-							deleteMessage(progressMessage.channelID, progressMessage.ID);
-						}
-						catch(const SleepyDiscord::ErrorCode & ignored) {}
+						bot.message_delete(progressMessage.id, progressMessage.channel_id);
 					}
 				}
 				else
@@ -519,57 +509,61 @@ public:
 						ubo->random = dist(e2);
 					});
 
-					backend.renderFrame([this, message](uint8_t* data, vk::DeviceSize size, int width, int height, vk::Result result, long time)
+					backend.renderFrame([this, message, &event, &bot](uint8_t* data, vk::DeviceSize size, int width, int height, vk::Result result, long time)
 					{
 						std::vector<unsigned char> imageBytes(data, data + size);
-						lodepng::encode("/tmp/render.png", imageBytes, width, height);
-						uploadFile(message.channelID, "/tmp/render.png", "Rendering finished in "+std::to_string(time)+" μs!");
+						std::vector<unsigned char> png;
+						lodepng::encode(png, imageBytes, width, height);
+
+						dpp::message msg(event.msg.channel_id, "Rendering finished in "+std::to_string(time)+" μs!");
+						msg.add_file("render.png", std::string(png.begin(), png.end()));
+						bot.message_create(msg);
 					});
 				}
 			}
 			else
 			{
-				sendMessage(message.channelID, error);
+				bot.message_create(dpp::message(event.msg.channel_id, error));
 			}
 		}
-		else if(message.startsWith("comp```glsl") || message.startsWith("compfile``"))
+		else if(message.starts_with("comp```glsl") || message.starts_with("compfile``"))
 		{
-			sendTyping(message.channelID);
+			bot.channel_typing(event.msg.channel_id);
 			std::string::size_type end = 0;
 
 			std::optional<std::string> computeShader;
 			std::optional<std::string> computePath;
 
-			auto computeStart = message.content.find("comp```glsl");
+			auto computeStart = message.find("comp```glsl");
 			if(computeStart != std::string::npos)
 			{
 				computeStart += 11 + 1;
-				auto computeEnd = message.content.find("```", computeStart);
+				auto computeEnd = message.find("```", computeStart);
 				if(computeEnd != std::string::npos)
 				{
-					computeShader = message.content.substr(computeStart, computeEnd - computeStart);
+					computeShader = message.substr(computeStart, computeEnd - computeStart);
 					if(computeEnd > end)
 						end = computeEnd + 3;
 				}
 			}
 			if(!computeShader.has_value())
 			{
-				computeStart = message.content.find("compfile``");
+				computeStart = message.find("compfile``");
 				if(computeStart != std::string::npos)
 				{
 					computeStart += 10;
-					auto computeEnd = message.content.find("``", computeStart);
+					auto computeEnd = message.find("``", computeStart);
 					if(computeEnd != std::string::npos)
 					{
-						computePath = message.content.substr(computeStart, computeEnd - computeStart);
+						computePath = message.substr(computeStart, computeEnd - computeStart);
 						if(computeEnd > end)
 							end = computeEnd + 2;
 					}
 				}
 			}
 
-			std::optional<SleepyDiscord::Attachment> imageAttachment;
-			for(const SleepyDiscord::Attachment& a : message.attachments)
+			std::optional<dpp::attachment> imageAttachment;
+			for(const auto& a : event.msg.attachments)
 			{
 				if(!imageAttachment.has_value() && a.filename.ends_with(".png"))
 					imageAttachment = a;
@@ -578,7 +572,7 @@ public:
 			auto [result, error] = backend.uploadComputeShader(computeShader.value_or(computePath.value_or("base")), !computeShader.has_value());
 			if(result)
 			{
-				std::string url = "https://cdn.discordapp.com/avatars/"+message.author.ID.string()+"/"+message.author.avatar+".png";
+				std::string url = event.msg.author.get_avatar_url();
 				if(imageAttachment.has_value())
 					url = imageAttachment->url;
 				std::vector<unsigned char> png;
@@ -603,7 +597,7 @@ public:
 						ubo->random = dist(e2);
 				});
 
-				backend.doComputation([this, message](OutputStorageObject* data, vk::Result result, long time)
+				backend.doComputation([this, &bot, &event](OutputStorageObject* data, vk::Result result, long time)
 				{
 					std::string value =
 						"float: " + std::to_string(data->as_float) + "\n" +
@@ -611,12 +605,13 @@ public:
 						"vec4 : " + glm::to_string(data->as_vec4) + "\n" +
 						"ivec4: " + glm::to_string(data->as_ivec4) + "\n" +
 						"chars: " + data->charsToString();
-					sendMessage(message.channelID, "Computation finished in "+std::to_string(time)+" μs!```"+value+"```");
+					dpp::message msg(event.msg.channel_id, "Computation finished in "+std::to_string(time)+" μs!```"+value+"```");
+					bot.message_create(msg);
 				});
 			}
 			else
 			{
-				sendMessage(message.channelID, error);
+				bot.message_create(dpp::message(event.msg.channel_id, error));
 			}
 		}
 	}
@@ -643,12 +638,8 @@ private:
 	long m_maxBitrate;
 };
 
-static MyClientClass* client;
-
 void INThandler(int sig)
 {
-	if(client)
-		delete client;
 	exit(0);
 }
 
@@ -660,9 +651,19 @@ int main()
 	nlohmann::json j;
 	config >> j;
 
-	client = new MyClientClass(j["discord"]["token"], SleepyDiscord::USER_CONTROLED_THREADS);
-	client->initVulkan(j);
-	client->run();
+	dpp::cluster bot(j["discord"]["token"], dpp::i_default_intents | dpp::i_message_content);
+	bot.on_log(dpp::utility::cout_logger());
+
+	VulkanBot client;
+	client.initVulkan(j);
+
+	bot.on_message_create([&bot, &client](const dpp::message_create_t &event){
+		if(event.msg.author.is_bot())
+			return;
+		client.onMessage(bot, event);
+	});
+
+	bot.start(dpp::st_wait);
 
 	return 0;
 }

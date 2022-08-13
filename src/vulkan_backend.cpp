@@ -922,7 +922,7 @@ namespace vulkanbot
 
 		m_device->resetFences(m_fence.get());
 
-		auto size = yuv420p ? 1024*1024*1.5 : 1024*1024*4;
+		auto size = (m_width * m_height) * (yuv420p ? 1.5 : 4);
 		uint8_t *pData = static_cast<uint8_t *>(m_device->mapMemory(m_outputImageMemory.get(), 0, size));
 		consumer(pData, size, m_width, m_height, r, duration);
 		m_device->unmapMemory(m_outputImageMemory.get());
