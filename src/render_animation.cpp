@@ -88,8 +88,6 @@ void VulkanBot::do_render_animation_internal(const dpp::interaction_create_t& ev
     }
     octx.writeTrailer();
 
-    event.edit_response(std::format("Rendering... {:.2f}% (frame {}/{})", 100.0, animation.frames, animation.frames));
-
     auto t2 = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count();
 

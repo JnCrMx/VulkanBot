@@ -343,7 +343,7 @@ namespace vulkanbot
 
 		std::array<vk::DescriptorSetLayoutBinding, 2> bindings;
 		bindings[0] = vk::DescriptorSetLayoutBinding(
-			0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment);
+			0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute);
 		bindings[1] = vk::DescriptorSetLayoutBinding(
 			1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute);
 		m_descriptorSetLayout = m_device->createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo({}, bindings));
@@ -942,7 +942,7 @@ namespace vulkanbot
 
 		OutputStorageObject *pData = static_cast<OutputStorageObject*>(m_device->mapMemory(m_outputStorageMemory.get(), 0, sizeof(OutputStorageObject)));
 		consumer(pData, r, duration);
-		m_device->unmapMemory(m_outputImageMemory.get());
+		m_device->unmapMemory(m_outputStorageMemory.get());
 	}
 
 	VulkanBackend::~VulkanBackend()
