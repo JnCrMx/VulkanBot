@@ -378,25 +378,27 @@ public:
 					av::FormatContext octx;
 					ofrmt.setFormat(std::string(), "/tmp/render.mp4");
 					octx.setFormat(ofrmt);
-					av::Codec ocodec = av::findEncodingCodec(ofrmt);
-					av::Stream ost = octx.addStream(ocodec);
-					av::VideoEncoderContext encoder {ost, ocodec};
 
-					av::Rational timeBase = {1, fps};
+					av::Codec ocodec = av::findEncodingCodec(ofrmt);
+					av::VideoEncoderContext encoder {ocodec};
+
+					av::Rational timebase = {1, fps};
+					av::PixelFormat pixelFormat{"yuv420p"};
+
 					encoder.setWidth(m_width);
 					encoder.setHeight(m_height);
-					encoder.setTimeBase(timeBase);
+					encoder.setTimeBase(timebase);
 					encoder.setBitRate(bitrate);
 					encoder.setGopSize(10);
 					encoder.setMaxBFrames(1);
-
-					av::PixelFormat pixelFormat("yuv420p");
-
 					encoder.setPixelFormat(pixelFormat);
-					ost.setFrameRate(timeBase);
+
+					encoder.open(av::Codec{});
+
+					av::Stream ost = octx.addStream(encoder);
+					ost.setFrameRate(timebase);
 
 					octx.openOutput("/tmp/render.mp4");
-					encoder.open(ocodec);
 					octx.dump();
 					octx.writeHeader();
 					octx.flush();
@@ -429,21 +431,24 @@ public:
 							ubo->random = dist(e2);
 						});
 
-						backend.renderFrame([&renderTime, pixelFormat, &encoder, &octx, timeBase, i]
+						backend.renderFrame([&renderTime, pixelFormat, &encoder, &octx, timebase, i]
 							(uint8_t* data, vk::DeviceSize size, int width, int height, vk::Result result, long time)
 						{
 							uint8_t *dataCopy = new uint8_t[size];
 							memcpy(dataCopy, data, size);
 
 							av::VideoFrame frame(dataCopy, size, pixelFormat, width, height);
-							frame.setTimeBase(timeBase);
+							frame.setTimeBase(timebase);
 							frame.setStreamIndex(0);
 							frame.setPictureType();
-							frame.setPts(av::Timestamp(i, timeBase));
+							frame.setPts(av::Timestamp(i, timebase));
 
 							av::Packet packet = encoder.encode(frame);
+							packet.setPts(av::Timestamp(i, timebase));
+
 							if(packet)
 							{
+								packet.setStreamIndex(0);
 								octx.writePacket(packet);
 							}
 
@@ -453,7 +458,7 @@ public:
 						}, true);
 					}
 
-					for(;;)
+					/*for(;;)
 					{
 						av::Packet packet = encoder.encode();
 						if(packet)
@@ -462,7 +467,7 @@ public:
 						}
 						else
 							break;
-					}
+					}*/
 
 					octx.writeTrailer();
 
@@ -476,27 +481,9 @@ public:
 					auto t2 = std::chrono::high_resolution_clock::now();
 					auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count();
 
-					/*try
-					{
-						uploadFile(message.channelID, "/tmp/render.mp4", "Finished in "+std::to_string(duration)+" ms! "+
-							"Rendering took "+std::to_string(renderTime/1000)+" ms!");
-					}
-					catch(const SleepyDiscord::ErrorCode& error)
-					{
-						// We could do this before trying to upload, but as there is no way to
-						// safely know the upload limit, I prefer to just try to upload the file.
-						auto size = std::filesystem::file_size("/tmp/render.mp4");
-
-						std::stringstream stream;
-						stream 	<< "Finished in " << duration << " ms! "
-								<< "Rendering took " << (renderTime/1000) << " ms!\n"
-								<< "**Upload failed with error code ``" << error << "``!** "
-								<< "File size is " << std::fixed << std::setprecision(2) << (size / 1000000.0) << " MB!";
-						if(size > 8000000) // here it is fine to just guess the limit
-							stream << " Maybe try a lower bitrate?";
-
-						sendMessage(message.channelID, stream.str());
-					}*/
+					dpp::message msg(event.msg.channel_id, "Rendering finished in "+std::to_string(duration)+" ms!");
+					msg.add_file("render.mp4", dpp::utility::read_file("/tmp/render.mp4"));
+					event.reply(msg);
 					if(m_renderProgress)
 					{
 						bot.message_delete(progressMessage.id, progressMessage.channel_id);
@@ -517,13 +504,13 @@ public:
 
 						dpp::message msg(event.msg.channel_id, "Rendering finished in "+std::to_string(time)+" μs!");
 						msg.add_file("render.png", std::string(png.begin(), png.end()));
-						bot.message_create(msg);
+						event.reply(msg);
 					});
 				}
 			}
 			else
 			{
-				bot.message_create(dpp::message(event.msg.channel_id, error));
+				event.reply(dpp::message(event.msg.channel_id, error));
 			}
 		}
 		else if(message.starts_with("comp```glsl") || message.starts_with("compfile``"))
@@ -606,12 +593,12 @@ public:
 						"ivec4: " + glm::to_string(data->as_ivec4) + "\n" +
 						"chars: " + data->charsToString();
 					dpp::message msg(event.msg.channel_id, "Computation finished in "+std::to_string(time)+" μs!```"+value+"```");
-					bot.message_create(msg);
+					event.reply(msg);
 				});
 			}
 			else
 			{
-				bot.message_create(dpp::message(event.msg.channel_id, error));
+				event.reply(dpp::message(event.msg.channel_id, error));
 			}
 		}
 	}

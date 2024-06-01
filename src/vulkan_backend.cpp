@@ -545,7 +545,7 @@ namespace vulkanbot
 		shader.setSourceEntryPoint("main");
 
 		EShMessages messages = (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules);
-		if(!shader.parse(&glslang::DefaultTBuiltInResource, 100, false, messages, includer))
+		if(!shader.parse(GetDefaultResources(), 100, false, messages, includer))
 		{
 			return {false, std::string(shader.getInfoLog())};
 		}

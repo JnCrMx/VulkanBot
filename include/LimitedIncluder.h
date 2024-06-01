@@ -2,7 +2,7 @@
 
 #include <fstream>
 #include <string>
-#include <ShaderLang.h>
+#include <glslang/Public/ShaderLang.h>
 
 namespace vulkan_bot
 {
