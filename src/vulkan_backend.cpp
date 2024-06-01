@@ -345,7 +345,7 @@ namespace vulkanbot
 		bindings[0] = vk::DescriptorSetLayoutBinding(
 			0, vk::DescriptorType::eCombinedImageSampler, 1, vk::ShaderStageFlagBits::eFragment);
 		bindings[1] = vk::DescriptorSetLayoutBinding(
-			1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment);
+			1, vk::DescriptorType::eUniformBuffer, 1, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment | vk::ShaderStageFlagBits::eCompute);
 		m_descriptorSetLayout = m_device->createDescriptorSetLayoutUnique(vk::DescriptorSetLayoutCreateInfo({}, bindings));
 
 		std::array<vk::DescriptorSetLayoutBinding, 1> computeBindings = {
@@ -789,7 +789,7 @@ namespace vulkanbot
 
 		m_computeCommandBuffer->bindPipeline(vk::PipelineBindPoint::eCompute, m_computePipeline.get());
 		m_computeCommandBuffer->bindDescriptorSets(vk::PipelineBindPoint::eCompute, m_computePipelineLayout.get(), 0,
-			{m_descriptorSet.get(), m_computeDescriptorSet.get()}, {0, 0});
+			{m_descriptorSet.get(), m_computeDescriptorSet.get()}, {});
 		m_computeCommandBuffer->dispatch(x, y, z);
 
 		m_computeCommandBuffer->end();
