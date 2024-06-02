@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Vulkan REQUIRED COMPONENTS glslangValidator SPIRV-Tools)
 find_package(glslang REQUIRED)
 find_package(glm REQUIRED)
-find_package(CURL REQUIRED)
 
 file(GLOB_RECURSE sources src/*.cpp src/*.h external/lodepng/lodepng.cpp)
 file(GLOB_RECURSE shaders shaders/*.vert shaders/*.frag shaders/*.comp)
@@ -65,5 +64,6 @@ target_link_libraries(vulkan_bot PUBLIC glslang::SPIRV glslang::glslang-default-
 target_link_libraries(vulkan_bot PUBLIC dpp nlohmann_json::nlohmann_json)
 target_link_libraries(vulkan_bot PUBLIC avcpp::avcpp-static)
 target_link_libraries(vulkan_bot PUBLIC glm::glm)
-target_link_libraries(vulkan_bot PUBLIC CURL::libcurl)
 target_compile_features(vulkan_bot PUBLIC cxx_std_23)
+
+install(TARGETS vulkan_bot DESTINATION bin)
