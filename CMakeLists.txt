@@ -28,7 +28,15 @@ FetchContent_Declare(avcpp
   GIT_REPOSITORY https://github.com/h4tr3d/avcpp.git
   GIT_TAG        v2.4.0
 )
-FetchContent_MakeAvailable(DPP json avcpp)
+FetchContent_MakeAvailable(json avcpp)
+
+option(USE_INSTALLED_DPP "Use preinstalled DPP" OFF)
+if(USE_INSTALLED_DPP)
+  find_package(dpp REQUIRED)
+else()
+  FetchContent_MakeAvailable(DPP)
+  add_library(dpp::dpp ALIAS dpp)
+endif(USE_INSTALLED_DPP)
 
 message(STATUS "Found GLSL compiler: ${Vulkan_GLSLANG_VALIDATOR_EXECUTABLE}")
 
@@ -61,9 +69,15 @@ endforeach()
 
 target_link_libraries(vulkan_bot PUBLIC Vulkan::Vulkan)
 target_link_libraries(vulkan_bot PUBLIC glslang::SPIRV glslang::glslang-default-resource-limits)
-target_link_libraries(vulkan_bot PUBLIC dpp nlohmann_json::nlohmann_json)
+target_link_libraries(vulkan_bot PUBLIC dpp::dpp nlohmann_json::nlohmann_json)
 target_link_libraries(vulkan_bot PUBLIC avcpp::avcpp-static)
 target_link_libraries(vulkan_bot PUBLIC glm::glm)
 target_compile_features(vulkan_bot PUBLIC cxx_std_23)
+
+if(USE_INSTALLED_DPP) # DPP doesn't properly export include directories nor libraries
+  target_include_directories(vulkan_bot PUBLIC ${dpp_DIR}/../../../include)
+  target_link_libraries(vulkan_bot PUBLIC nlohmann_json::nlohmann_json)
+  target_link_libraries(vulkan_bot PUBLIC crypto ssl)
+endif(USE_INSTALLED_DPP)
 
 install(TARGETS vulkan_bot DESTINATION bin)
