@@ -4,7 +4,7 @@ steps:
     settings:
       username: jcm
       password:
-        from_secret: docker_password
+        from_secret: gitea_package_token
       repo: git.jcm.re/jcm/vulkan_bot
       registry: git.jcm.re
       tags: latest
