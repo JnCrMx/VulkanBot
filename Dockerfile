@@ -7,8 +7,13 @@ RUN apt-get update && \
     libswscale-dev libswresample-dev libpostproc-dev libavdevice-dev \
     zlib1g-dev libssl-dev
 
+ARG DPP_VERSION=v10.0.26
+RUN mkdir -p /third_party/dpp/install && curl https://files.jcm.re/dpp-${DPP_VERSION}-$(arch).tar.gz | tar -C /third_party/dpp/install -xz
+
 COPY . /src
 RUN /usr/bin/cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DUSE_INSTALLED_DPP=ON \
+    -DCMAKE_SYSTEM_PREFIX_PATH="/third_party/dpp/install" \
     -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
     -S/src -B/build -G Ninja
 RUN /usr/bin/cmake --build /build --config RelWithDebInfo --target all --parallel $(($(nproc) / 2)) --
