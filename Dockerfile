@@ -1,7 +1,7 @@
 FROM docker.io/ubuntu:noble
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-    cmake git clang ninja-build glslang-tools pkg-config \
+    curl cmake git clang ninja-build glslang-tools pkg-config \
     libvulkan-dev libglm-dev glslang-dev \
     libavformat-dev libavcodec-dev libavutil-dev libavfilter-dev \
     libswscale-dev libswresample-dev libpostproc-dev libavdevice-dev \
