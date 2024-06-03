@@ -1,0 +1,22 @@
+steps:
+  docker:
+    image: plugins/kaniko
+    settings:
+      username: jcm
+      password:
+        from_secret: docker_password
+      repo: git.jcm.re/jcm/vulkan_bot
+      registry: git.jcm.re
+      tags: latest
+      snapshot-mode: redo
+    backend_options:
+      kubernetes:
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: 500m
+          limits:
+            memory: 3Gi
+            cpu: 2500m
+        nodeSelector:
+          jcm.re/ci-type: big
