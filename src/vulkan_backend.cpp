@@ -1,21 +1,19 @@
 #include "vulkan_backend.h"
-#include "LimitedIncluder.h"
 
-#include <array>
 #include <bits/stdint-uintn.h>
 #include <cstdint>
 #include <functional>
 #include <glm/fwd.hpp>
 #include <iostream>
 #include <fstream>
-#include <memory>
 #include <stdexcept>
 #include <chrono>
 #include <string>
 #include <tuple>
-#include <vector>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_core.h>
+
+#include "LimitedIncluder.h"
 
 namespace vulkanbot
 {

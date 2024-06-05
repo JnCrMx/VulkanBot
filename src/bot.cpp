@@ -1,10 +1,9 @@
 #include "bot.hpp"
-#include <glm/gtx/string_cast.hpp>
 
 #include <dpp/dpp.h>
-
-#include "av.h"
-#include "avutils.h"
+#include <av.h>
+#include <avutils.h>
+#include <glm/gtx/string_cast.hpp>
 
 #include "vulkan_backend.h"
 

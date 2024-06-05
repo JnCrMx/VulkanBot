@@ -1,5 +1,6 @@
 #include "bot.hpp"
-#include "lodepng.h"
+
+#include <lodepng.h>
 #include <glm/gtx/string_cast.hpp>
 
 namespace vulkanbot {
