@@ -270,8 +270,27 @@ int main()
 	nlohmann::json j;
 	config >> j;
 
-	VulkanBot client(j);
-	client.run();
+	std::filesystem::path shaders_directory;
+	if(auto* path = std::getenv("VULKAN_BOT_SHADER_DIRECTORY")) {
+		shaders_directory = path;
+	}
+	else {
+		std::filesystem::path exe_directory = std::filesystem::canonical("/proc/self/exe").parent_path();
+		do {
+			if(std::filesystem::exists(shaders_directory = exe_directory / "shaders"))
+				break;
+			if(std::filesystem::exists(shaders_directory = exe_directory / ".." / "share" / "vulkan_bot" / "shaders"))
+				break;
+			if(std::filesystem::exists(shaders_directory = std::filesystem::current_path() / "shaders"))
+				break;
+
+			std::cerr << "Could not find shaders directory.\nYou can specify it using the enviornment variable VULKAN_BOT_SHADER_DIRECTORY." << std::endl;
+			return 2;
+		} while(false);
+	}
+
+	VulkanBot bot(j);
+	bot.run();
 
 	return 0;
 }
