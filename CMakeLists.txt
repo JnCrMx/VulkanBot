@@ -80,4 +80,7 @@ if(USE_INSTALLED_DPP) # DPP doesn't properly export include directories nor libr
   target_link_libraries(vulkan_bot PUBLIC crypto ssl)
 endif(USE_INSTALLED_DPP)
 
-install(TARGETS vulkan_bot DESTINATION bin)
+include(GNUInstallDirs)
+
+install(TARGETS vulkan_bot DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders DESTINATION ${CMAKE_INSTALL_DATADIR})
