@@ -262,11 +262,18 @@ void INThandler(int sig)
 	exit(0);
 }
 
-int main()
+int main(int argc, char** argv)
 {
+	std::filesystem::path config_path = "config.json";
+	if(argc >= 2) {
+		config_path = argv[1];
+	} else if(auto* path = std::getenv("VULKAN_BOT_CONFIG_FILE")) {
+		config_path = path;
+	}
+
 	std::signal(SIGINT, INThandler);
 
-	std::ifstream config("config.json");
+	std::ifstream config(config_path);
 	nlohmann::json j;
 	config >> j;
 
