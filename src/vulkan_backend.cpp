@@ -151,10 +151,14 @@ namespace vulkanbot
 		return VK_FALSE;
 	}
 
-	void VulkanBackend::initVulkan(int width, int height, bool validation, int debugSeverity, int debugType)
+	void VulkanBackend::initVulkan(int width, int height, 
+		const std::filesystem::path& shadersPath, const std::filesystem::path& shaderIncludePath,
+		bool validation, int debugSeverity, int debugType)
 	{
 		m_width = static_cast<uint32_t>(width);
 		m_height = static_cast<uint32_t>(height);
+		m_shadersPath = shadersPath;
+		m_shaderIncludePath = shaderIncludePath;
 
 		vk::ApplicationInfo applicationInfo("VulkanBot", 1, "VulkanBot", 1, VK_API_VERSION_1_1);
 
@@ -406,7 +410,7 @@ namespace vulkanbot
 		m_encodePipeline = createEncodePipeline();
 	}
 
-	static std::vector<char> readFile(const std::string& filename)
+	static std::vector<char> readFile(const std::filesystem::path& filename)
 	{
 		std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -437,9 +441,6 @@ namespace vulkanbot
 	vk::UniquePipeline VulkanBackend::createPipeline(vk::UniqueShaderModule& vertexShader, vk::UniqueShaderModule& fragmentShader,
 		vk::CullModeFlags cullMode, bool depth)
 	{
-		//vk::UniqueShaderModule vertexShader = createShader(readFile("shaders/base.vert.spv"));
-		//vk::UniqueShaderModule fragmentShader = createShader(code);
-
 		vk::PipelineShaderStageCreateInfo vertexShaderInfo({}, vk::ShaderStageFlagBits::eVertex, vertexShader.get(), "main");
 		vk::PipelineShaderStageCreateInfo fragmentShaderInfo({}, vk::ShaderStageFlagBits::eFragment, fragmentShader.get(), "main");
 		std::array<vk::PipelineShaderStageCreateInfo, 2> shaderStages = { vertexShaderInfo, fragmentShaderInfo };
@@ -508,7 +509,7 @@ namespace vulkanbot
 
 	vk::UniquePipeline VulkanBackend::createEncodePipeline()
 	{
-		vk::UniqueShaderModule computeShader = createShader(readFile("shaders/yuv420p_encode.comp.spv"));
+		vk::UniqueShaderModule computeShader = createShader(readFile(m_shadersPath / "yuv420p_encode.comp.spv"));
 		vk::PipelineShaderStageCreateInfo shaderInfo({}, vk::ShaderStageFlagBits::eCompute, computeShader.get(), "main");
 
 		vk::Result result;
@@ -527,9 +528,9 @@ namespace vulkanbot
 		return pipeline;
 	}
 
-	std::tuple<bool, std::string> compileShader(EShLanguage stage, std::string glslCode, std::vector<unsigned int>& shaderCode)
+	std::tuple<bool, std::string> compileShader(EShLanguage stage, std::string glslCode, std::vector<unsigned int>& shaderCode, const std::filesystem::path& includePath)
 	{
-		vulkan_bot::LimitedIncluder includer("shader_include");
+		vulkan_bot::LimitedIncluder includer(includePath);
 
 		const char * shaderStrings[1];
 		shaderStrings[0] = glslCode.data();
@@ -580,7 +581,7 @@ namespace vulkanbot
 			{
 				try
 				{
-					vertexShader = createShader(readFile("shaders/"+vertex+".vert.spv"));
+					vertexShader = createShader(readFile(m_shadersPath / (vertex+".vert.spv")));
 				}
 				catch(const std::runtime_error& err)
 				{
@@ -590,7 +591,7 @@ namespace vulkanbot
 		}
 		else
 		{
-			vertexResult = compileShader(EShLangVertex, vertex, vertexBin);
+			vertexResult = compileShader(EShLangVertex, vertex, vertexBin, m_shaderIncludePath);
 			if(std::get<0>(vertexResult))
 				vertexShader = createShader(vertexBin);
 		}
@@ -602,7 +603,7 @@ namespace vulkanbot
 			{
 				try
 				{
-					fragmentShader = createShader(readFile("shaders/"+fragment+".frag.spv"));
+					fragmentShader = createShader(readFile(m_shadersPath / (fragment+".frag.spv")));
 				}
 				catch(const std::runtime_error& err)
 				{
@@ -612,7 +613,7 @@ namespace vulkanbot
 		}
 		else
 		{
-			fragmentResult = compileShader(EShLangFragment, fragment, fragmentBin);
+			fragmentResult = compileShader(EShLangFragment, fragment, fragmentBin, m_shaderIncludePath);
 			if(std::get<0>(fragmentResult))
 				fragmentShader = createShader(fragmentBin);
 		}
@@ -642,7 +643,7 @@ namespace vulkanbot
 			{
 				try
 				{
-					computeShader = createShader(readFile("shaders/"+compute+".comp.spv"));
+					computeShader = createShader(readFile(m_shadersPath / (compute+".comp.spv")));
 				}
 				catch(const std::runtime_error& err)
 				{
@@ -652,7 +653,7 @@ namespace vulkanbot
 		}
 		else
 		{
-			computeResult = compileShader(EShLangCompute, compute, computeBin);
+			computeResult = compileShader(EShLangCompute, compute, computeBin, m_shaderIncludePath);
 			if(std::get<0>(computeResult))
 				computeShader = createShader(computeBin);
 		}

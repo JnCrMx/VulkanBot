@@ -37,7 +37,7 @@ private:
 		std::optional<animation> animation = std::nullopt);
 	void do_render_animation_internal(const dpp::interaction_create_t& event, animation animation);
 
-    void initVulkan(const nlohmann::json& config);
+    void initVulkan(const nlohmann::json& config, const std::filesystem::path& shader_path, const std::filesystem::path& shader_include_path);
 
     dpp::cluster bot;
 

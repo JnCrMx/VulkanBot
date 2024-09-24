@@ -8,7 +8,9 @@ namespace vulkanbot {
 void VulkanBot::do_render(const dpp::interaction_create_t& event, const dpp::message& message, const shader& vert, const shader& frag, std::optional<animation> animation) {
     event.thinking();
 
+    std::cout << "Acquiring render lock..." << std::endl;
     std::unique_lock lock(render_lock);
+    std::cout << "Start rendering..." << std::endl;
 
     auto [result, error] = backend.uploadShaderMix(vert.data, vert.file, frag.data, frag.file, vk::CullModeFlagBits::eFront, true);
     if(!result) {
@@ -50,6 +52,7 @@ void VulkanBot::do_render(const dpp::interaction_create_t& event, const dpp::mes
             event.edit_response(msg);
         });
     }
+    std::cout << "Rendering finished!" << std::endl;
 }
 
 }

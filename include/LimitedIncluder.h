@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <glslang/Public/ShaderLang.h>
@@ -9,7 +10,7 @@ namespace vulkan_bot
 	class LimitedIncluder : public glslang::TShader::Includer
 	{
 		public:
-			LimitedIncluder(std::string directory) : m_directory(directory) {}
+			LimitedIncluder(const std::filesystem::path& directory) : m_directory(directory) {}
 
 			virtual IncludeResult* includeLocal(const char* headerName,
 												const char* includerName,
@@ -17,7 +18,7 @@ namespace vulkan_bot
 			{
 				if(std::string(headerName).find("../") != std::string::npos)
 					return nullptr;
-				std::string path = m_directory + '/' + headerName;
+				std::filesystem::path path = m_directory / headerName;
 
 				std::ifstream stream(path, std::ios_base::binary | std::ios_base::ate);
 				if(!stream)
@@ -40,6 +41,6 @@ namespace vulkan_bot
 			}
 		private:
 			typedef char tUserDataElement;
-			std::string m_directory;
+			std::filesystem::path m_directory;
 	};
 };

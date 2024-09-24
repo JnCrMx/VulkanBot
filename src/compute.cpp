@@ -8,7 +8,9 @@ namespace vulkanbot {
 void VulkanBot::do_compute(const dpp::interaction_create_t& event, const dpp::message& message, const shader& shader) {
     event.thinking();
 
+    std::cout << "Acquiring render lock..." << std::endl;
     std::unique_lock lock(render_lock);
+    std::cout << "Start computing..." << std::endl;
 
     auto [result, error] = backend.uploadComputeShader(shader.data, shader.file);
     if(!result) {
@@ -46,6 +48,7 @@ void VulkanBot::do_compute(const dpp::interaction_create_t& event, const dpp::me
         dpp::message msg({}, "Computation finished in "+std::to_string(time)+" μs!```"+value+"```");
         event.edit_response(msg);
     });
+    std::cout << "Computation finished!" << std::endl;
 }
 
 }

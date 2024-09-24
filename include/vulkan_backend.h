@@ -2,6 +2,7 @@
 
 #include <bits/stdint-uintn.h>
 #include <cctype>
+#include <filesystem>
 #include <functional>
 #include <tuple>
 #include <memory>
@@ -134,7 +135,9 @@ namespace vulkanbot
 		public:
 			~VulkanBackend();
 
-			void initVulkan(int width, int height, bool validation = false, int debugSeverity = 0, int debugType = 0);
+			void initVulkan(int width, int height, 
+				const std::filesystem::path& shadersPath, const std::filesystem::path& shaderIncludePath,
+				bool validation = false, int debugSeverity = 0, int debugType = 0);
 
 			std::tuple<bool, std::string> uploadShaderMix(const std::string vertex, bool vertexFile, const std::string fragment, bool fragmentFile,
 				vk::CullModeFlags cullMode = vk::CullModeFlagBits::eFront, bool depth = true);
@@ -156,6 +159,9 @@ namespace vulkanbot
 		private:
 			uint32_t m_width = 1024;
 			uint32_t m_height = 1024;
+
+			std::filesystem::path m_shadersPath;
+			std::filesystem::path m_shaderIncludePath;
 
 			vk::UniqueShaderModule createShader(const std::vector<unsigned int>& code);
 			vk::UniqueShaderModule createShader(const std::vector<char>& code);

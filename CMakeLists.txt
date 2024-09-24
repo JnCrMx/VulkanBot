@@ -19,22 +19,42 @@ target_include_directories(vulkan_bot PUBLIC include/)
 target_include_directories(vulkan_bot PUBLIC external/lodepng)
 
 include(FetchContent)
+
+function(FetchContent_MakeAvailable_ExcludeFromAll)
+  if(CMAKE_VERSION VERSION_LESS "3.28.0")
+    foreach(_name ${ARGN})
+        FetchContent_GetProperties(${_name})
+        if(NOT ${_name}_POPULATED)
+            FetchContent_Populate(${_name})
+            add_subdirectory(${${_name}_SOURCE_DIR} ${${_name}_BINARY_DIR} EXCLUDE_FROM_ALL)
+        endif()
+    endforeach()
+  else()
+    FetchContent_MakeAvailable(${ARGN})
+  endif()
+endfunction()
+
 FetchContent_Declare(DPP
   GIT_REPOSITORY https://github.com/brainboxdotcc/DPP.git
   GIT_TAG        v10.0.30
+  EXCLUDE_FROM_ALL
 )
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz)
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz EXCLUDE_FROM_ALL)
 FetchContent_Declare(avcpp
   GIT_REPOSITORY https://github.com/h4tr3d/avcpp.git
   GIT_TAG        v2.4.0
+  EXCLUDE_FROM_ALL
 )
-FetchContent_MakeAvailable(json avcpp)
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable_ExcludeFromAll(json avcpp)
 
 option(USE_INSTALLED_DPP "Use preinstalled DPP" OFF)
 if(USE_INSTALLED_DPP)
   find_package(dpp REQUIRED)
 else()
-  FetchContent_MakeAvailable(DPP)
+  FetchContent_MakeAvailable_ExcludeFromAll(DPP)
   add_library(dpp::dpp ALIAS dpp)
 endif(USE_INSTALLED_DPP)
 
@@ -80,4 +100,6 @@ if(USE_INSTALLED_DPP) # DPP doesn't properly export include directories nor libr
   target_link_libraries(vulkan_bot PUBLIC crypto ssl)
 endif(USE_INSTALLED_DPP)
 
-install(TARGETS vulkan_bot DESTINATION bin)
+install(TARGETS vulkan_bot)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shaders DESTINATION share/vulkan_bot)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/shader_include DESTINATION share/vulkan_bot)

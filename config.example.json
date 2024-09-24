@@ -32,5 +32,9 @@
 		"av": {
 			"verbose": true
 		}
+	},
+	"paths": {
+		"shaders": "/usr/share/vulkan_bot/shaders",
+		"shader_include": "/usr/share/vulkan_bot/shader_include"
 	}
 }

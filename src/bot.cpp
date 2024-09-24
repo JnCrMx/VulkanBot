@@ -3,6 +3,7 @@
 #include <dpp/dpp.h>
 #include <av.h>
 #include <avutils.h>
+#include <filesystem>
 #include <glm/gtx/string_cast.hpp>
 
 #include "vulkan_backend.h"
@@ -82,12 +83,50 @@ namespace vulkanbot {
 		return shaders;
 	}
 
+	std::optional<std::filesystem::path> find_first_existing(std::initializer_list<std::filesystem::path> paths) {
+		for(auto& p : paths) {
+			if(std::filesystem::exists(p)) {
+				return p;
+			}
+		}
+		return std::nullopt;
+	}
+
 	VulkanBot::VulkanBot(const nlohmann::json& config) : bot(config["discord"]["token"], dpp::i_default_intents) {
 		m_maxFrames = config["video"]["max"]["frames"];
 
 		bot.on_log(dpp::utility::cout_logger());
 
-		initVulkan(config);
+		std::filesystem::path executable_path = std::filesystem::read_symlink("/proc/self/exe");
+		std::filesystem::path shaders_path;
+		if(config.contains("paths") && config["paths"].contains("shaders")) {
+			shaders_path = config["paths"]["shaders"].get<std::string>();
+		} else {
+			shaders_path = find_first_existing({
+				std::filesystem::current_path() / "shaders",
+				executable_path.parent_path().parent_path() / "share" / "vulkan_bot" / "shaders"
+			}).value_or("shaders");
+		}
+		if(!std::filesystem::exists(shaders_path)) {
+			throw std::runtime_error("Shaders path does not exist");
+		}
+		std::cout << "Shaders path: " << shaders_path << std::endl;
+
+		std::filesystem::path shader_include_path;
+		if(config.contains("paths") && config["paths"].contains("shader_include")) {
+			shader_include_path = config["shader_include_path"].get<std::string>();
+		} else {
+			shader_include_path = find_first_existing({
+				std::filesystem::current_path() / "shader_include",
+				executable_path.parent_path().parent_path() / "share" / "vulkan_bot" / "shader_include"
+			}).value_or("shader_include");
+		}
+		if(!std::filesystem::exists(shader_include_path)) {
+			throw std::runtime_error("Shader include path does not exist");
+		}
+		std::cout << "Shader include path: " << shader_include_path << std::endl;
+
+		initVulkan(config, shaders_path, shader_include_path);
 		bot.on_ready([this](const dpp::ready_t & event) {
 	        if (dpp::run_once<struct register_bot_commands>()) {
 				//bot.global_bulk_command_delete_sync();
@@ -202,7 +241,7 @@ namespace vulkanbot {
 	void VulkanBot::run() {
 		bot.start(dpp::st_wait);
 	}
-	void VulkanBot::initVulkan(const nlohmann::json& config) {
+	void VulkanBot::initVulkan(const nlohmann::json& config, const std::filesystem::path& shaders_path, const std::filesystem::path& shader_include_path) {
 		m_width = config["image"]["width"];
 		m_height = config["image"]["height"];
 
@@ -253,7 +292,8 @@ namespace vulkanbot {
 		av::init();
 		av::setFFmpegLoggingLevel(avLogLevel);
 
-		backend.initVulkan(m_width, m_height, vulkanValidate, vulkanDebugSeverity, vulkanDebugType);
+		backend.initVulkan(m_width, m_height, shaders_path, shader_include_path, 
+			vulkanValidate, vulkanDebugSeverity, vulkanDebugType);
 	}
 }
 
@@ -262,13 +302,31 @@ void INThandler(int sig)
 	exit(0);
 }
 
-int main()
+int main(int argc, char** argv)
 {
 	std::signal(SIGINT, INThandler);
 
-	std::ifstream config("config.json");
+	std::filesystem::path config_path;
+	if(argc > 1) {
+		config_path = argv[1];
+	} else if(const char* env = std::getenv("VULKAN_BOT_CONFIG")) {
+		config_path = env;
+	} else {
+		config_path = find_first_existing({
+			"/etc/vulkan_bot/config.json",
+			std::filesystem::current_path() / "config.json",
+		}).value_or("config.json");
+	}
+
 	nlohmann::json j;
-	config >> j;
+	{
+		std::ifstream config(config_path);
+		if(!config) {
+			std::cerr << "Could not open config file at " << config_path << std::endl;
+			return 1;
+		}
+		config >> j;
+	}
 
 	VulkanBot client(j);
 	client.run();

@@ -7,7 +7,7 @@ RUN apt-get update && \
     libswscale-dev libswresample-dev libpostproc-dev libavdevice-dev \
     zlib1g-dev libssl-dev
 
-ARG DPP_VERSION=v10.0.26
+ARG DPP_VERSION=v10.0.30
 RUN mkdir -p /third_party/dpp/install && curl https://files.jcm.re/dpp-${DPP_VERSION}-$(arch).tar.gz | tar -C /third_party/dpp/install -xz
 
 COPY . /src
