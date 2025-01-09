@@ -1,5 +1,6 @@
 #include "bot.hpp"
 
+#include <algorithm>
 #include <dpp/dpp.h>
 #include <av.h>
 #include <avutils.h>
@@ -128,13 +129,17 @@ namespace vulkanbot {
 
 		initVulkan(config, shaders_path, shader_include_path);
 		bot.on_message_context_menu([this](const dpp::message_context_menu_t& event){
-			shader_type def = event.command.get_command_name() == "Compute" ? shader_type::comp : shader_type::frag;
+			std::string command_name = event.command.get_command_name();
+			std::transform(command_name.begin(), command_name.end(), command_name.begin(),
+				[](unsigned char c){ return std::tolower(c); });
+
+			shader_type def = command_name == "compute" ? shader_type::comp : shader_type::frag;
 			auto shaders = find_shaders(event.get_message().content, def);
 			if(shaders.empty()) {
 				event.reply("Error: No shaders found in message");
 				return;
 			}
-			if(event.command.get_command_name() == "Compute") {
+			if(command_name == "compute") {
 				if(shaders.size() != 1 || shaders[0].type != shader_type::comp) {
 					event.reply("Error: Exactly one compute shader required");
 					return;
@@ -159,12 +164,12 @@ namespace vulkanbot {
 						return;
 					}
 				}
-				if(event.command.get_command_name() == "Render Image") {
+				if(command_name == "render image") {
 					std::thread t([this, event, vert, frag](){
 						do_render(event, event.get_message(), vert, frag);
 					});
 					t.detach();
-				} else if(event.command.get_command_name() == "Render Video") {
+				} else if(command_name == "render video") {
 					unsigned long long int id = next_animation_id++;
 					pending_animations[id] = {
 						.vert = vert, .frag = frag, .event = event
