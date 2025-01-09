@@ -92,7 +92,7 @@ namespace vulkanbot {
 		return std::nullopt;
 	}
 
-	VulkanBot::VulkanBot(const nlohmann::json& config) : bot(config["discord"]["token"], dpp::i_default_intents) {
+	VulkanBot::VulkanBot(const nlohmann::json& config) : bot(config["discord"]["token"]) {
 		m_maxFrames = config["video"]["max"]["frames"];
 
 		bot.on_log(dpp::utility::cout_logger());
@@ -114,7 +114,7 @@ namespace vulkanbot {
 
 		std::filesystem::path shader_include_path;
 		if(config.contains("paths") && config["paths"].contains("shader_include")) {
-			shader_include_path = config["shader_include_path"].get<std::string>();
+			shader_include_path = config["paths"]["shaders"].get<std::string>();
 		} else {
 			shader_include_path = find_first_existing({
 				std::filesystem::current_path() / "shader_include",
@@ -127,23 +127,14 @@ namespace vulkanbot {
 		std::cout << "Shader include path: " << shader_include_path << std::endl;
 
 		initVulkan(config, shaders_path, shader_include_path);
-		bot.on_ready([this](const dpp::ready_t & event) {
-	        if (dpp::run_once<struct register_bot_commands>()) {
-				//bot.global_bulk_command_delete_sync();
-
-				bot.global_command_create(dpp::slashcommand("render image", "Render as an image", bot.me.id).set_type(dpp::ctxm_message));
-				bot.global_command_create(dpp::slashcommand("render video", "Render as an animation", bot.me.id).set_type(dpp::ctxm_message));
-				bot.global_command_create(dpp::slashcommand("compute", "Execute as compute shader", bot.me.id).set_type(dpp::ctxm_message));
-	        }
-	    });
 		bot.on_message_context_menu([this](const dpp::message_context_menu_t& event){
-			shader_type def = event.command.get_command_name() == "compute" ? shader_type::comp : shader_type::frag;
+			shader_type def = event.command.get_command_name() == "Compute" ? shader_type::comp : shader_type::frag;
 			auto shaders = find_shaders(event.get_message().content, def);
 			if(shaders.empty()) {
 				event.reply("Error: No shaders found in message");
 				return;
 			}
-			if(event.command.get_command_name() == "compute") {
+			if(event.command.get_command_name() == "Compute") {
 				if(shaders.size() != 1 || shaders[0].type != shader_type::comp) {
 					event.reply("Error: Exactly one compute shader required");
 					return;
@@ -168,12 +159,12 @@ namespace vulkanbot {
 						return;
 					}
 				}
-				if(event.command.get_command_name() == "render image") {
+				if(event.command.get_command_name() == "Render Image") {
 					std::thread t([this, event, vert, frag](){
 						do_render(event, event.get_message(), vert, frag);
 					});
 					t.detach();
-				} else if(event.command.get_command_name() == "render video") {
+				} else if(event.command.get_command_name() == "Render Video") {
 					unsigned long long int id = next_animation_id++;
 					pending_animations[id] = {
 						.vert = vert, .frag = frag, .event = event
@@ -237,6 +228,27 @@ namespace vulkanbot {
 			});
 			t.detach();
 	    });
+		bot.on_ready([this](const dpp::ready_t & event) {
+	        if (dpp::run_once<struct register_bot_commands>()) {
+				std::vector<dpp::interaction_context_type> contexts = {
+					dpp::itc_guild, dpp::itc_bot_dm, dpp::itc_private_channel
+				};
+
+				std::vector<dpp::slashcommand> commands = {
+					dpp::slashcommand("Render Image", "Render as an image", bot.me.id)
+						.set_type(dpp::ctxm_message).set_dm_permission(true).set_interaction_contexts(contexts),
+					dpp::slashcommand("Render Video", "Render as an animation", bot.me.id)
+						.set_type(dpp::ctxm_message).set_dm_permission(true).set_interaction_contexts(contexts),
+					dpp::slashcommand("Compute", "Execute as compute shader", bot.me.id)
+						.set_type(dpp::ctxm_message).set_dm_permission(true).set_interaction_contexts(contexts),
+				};
+				bot.global_bulk_command_create(commands);
+
+				bot.set_presence(dpp::presence(dpp::ps_online, dpp::at_game, "with shaders!"));
+				std::cout << "Registered commands!\n";
+				std::cout << "Bot Username: " << bot.me.username << '\n';
+	        }
+	    });
 	}
 	void VulkanBot::run() {
 		bot.start(dpp::st_wait);
@@ -292,7 +304,7 @@ namespace vulkanbot {
 		av::init();
 		av::setFFmpegLoggingLevel(avLogLevel);
 
-		backend.initVulkan(m_width, m_height, shaders_path, shader_include_path, 
+		backend.initVulkan(m_width, m_height, shaders_path, shader_include_path,
 			vulkanValidate, vulkanDebugSeverity, vulkanDebugType);
 	}
 }
@@ -348,6 +360,7 @@ int main(int argc, char** argv)
 	}
 
 	VulkanBot bot(j);
+	std::cout << "Running bot...\n";
 	bot.run();
 
 	return 0;

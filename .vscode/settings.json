@@ -1,0 +1,5 @@
+{
+    "cmake.configureArgs": [
+        "-DCMAKE_LINKER_TYPE=LLD"
+    ]
+}
