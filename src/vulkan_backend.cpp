@@ -151,7 +151,7 @@ namespace vulkanbot
 		return VK_FALSE;
 	}
 
-	void VulkanBackend::initVulkan(int width, int height, 
+	void VulkanBackend::initVulkan(int width, int height,
 		const std::filesystem::path& shadersPath, const std::filesystem::path& shaderIncludePath,
 		bool validation, int debugSeverity, int debugType)
 	{
@@ -328,13 +328,18 @@ namespace vulkanbot
 		vk::AttachmentReference depthAttachmentRef(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 		vk::SubpassDescription subpass(
 			{}, vk::PipelineBindPoint::eGraphics, {}, colorAttachmentRef, {}, &depthAttachmentRef);
-		vk::SubpassDependency dependency(VK_SUBPASS_EXTERNAL, 0,
-			vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
-			vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests, {},
-			vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite, {});
+		std::array<vk::SubpassDependency, 2> dependencies = {
+			vk::SubpassDependency{VK_SUBPASS_EXTERNAL, 0,
+				vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
+				vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests, {},
+				vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite, {}},
+			vk::SubpassDependency{0, vk::SubpassExternal,
+				vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eTransfer,
+				vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eTransferRead},
+		};
 
 		m_renderPass = m_device->createRenderPassUnique(
-			vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(), attachmentDescriptions, subpass, dependency));
+			vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(), attachmentDescriptions, subpass, dependencies));
 
 		std::array<vk::ImageView, 2> attachments = {
 			m_renderImage->imageView.get(),
@@ -710,6 +715,15 @@ namespace vulkanbot
 		m_commandBuffer->drawIndexed(mesh->indexCount, 1, 0, 0, 0);
 		m_commandBuffer->endRenderPass();
 
+		// I have no idea why we need this... but it works... Oh well, it's staying here.
+		m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
+			{}, {}, {},
+			vk::ImageMemoryBarrier(
+				vk::AccessFlagBits::eColorAttachmentWrite, vk::AccessFlagBits::eTransferRead,
+				vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eTransferSrcOptimal,
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED,
+				m_renderImage->image.get(), vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1)));
+
 		if(yuv420p)
 		{
 			m_commandBuffer->pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands,
@@ -777,6 +791,15 @@ namespace vulkanbot
 			};
 			m_commandBuffer->copyImageToBuffer(m_renderImage->image.get(), vk::ImageLayout::eTransferSrcOptimal, m_outputImageBuffer.get(), regions);
 		}
+
+		m_commandBuffer->pipelineBarrier(
+			vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eHost,
+			{}, {},
+			vk::BufferMemoryBarrier(
+				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eHostRead,
+				VK_QUEUE_FAMILY_IGNORED, VK_QUEUE_FAMILY_IGNORED, m_outputImageBuffer.get(), 0, VK_WHOLE_SIZE),
+			{}
+		);
 
 		m_commandBuffer->end();
 	}
@@ -911,8 +934,7 @@ namespace vulkanbot
 
 	void VulkanBackend::renderFrame(std::function<void(uint8_t*, vk::DeviceSize, int, int, vk::Result, long)> consumer, bool yuv420p)
 	{
-		vk::PipelineStageFlags waitDestinationStageMask(vk::PipelineStageFlagBits::eTransfer);
-		m_queue.submit(vk::SubmitInfo(0, nullptr, &waitDestinationStageMask, 1, &m_commandBuffer.get()), m_fence.get());
+		m_queue.submit(vk::SubmitInfo(0, nullptr, nullptr, 1, &m_commandBuffer.get()), m_fence.get());
 
 		auto t1 = std::chrono::high_resolution_clock::now();
 		vk::Result r = m_device->waitForFences(m_fence.get(), true, UINT64_MAX);
