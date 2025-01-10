@@ -32,9 +32,10 @@ public:
 private:
 	std::vector<unsigned char> download_image(const std::string& url);
 
-    void do_compute(const dpp::interaction_create_t& event, const dpp::message& message, const shader& shader);
+    void do_compute(const dpp::interaction_create_t& event, const dpp::message& message, const shader& shader,
+		const std::string& texture);
     void do_render(const dpp::interaction_create_t& event, const dpp::message& message, const shader& vertex, const shader& fragment,
-		std::optional<animation> animation = std::nullopt);
+		const std::string& texture, std::optional<animation> animation = std::nullopt);
 	void do_render_animation_internal(const dpp::interaction_create_t& event, animation animation);
 
     void initVulkan(const nlohmann::json& config, const std::filesystem::path& shader_path, const std::filesystem::path& shader_include_path);
@@ -65,6 +66,8 @@ private:
 	struct animation_render_data {
 		shader vert;
 		shader frag;
+		std::string texture;
+		std::optional<std::string> mesh;
 		dpp::message_context_menu_t event;
 	};
 	unsigned long long int next_animation_id = 0;

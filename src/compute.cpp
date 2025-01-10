@@ -5,7 +5,7 @@
 
 namespace vulkanbot {
 
-void VulkanBot::do_compute(const dpp::interaction_create_t& event, const dpp::message& message, const shader& shader) {
+void VulkanBot::do_compute(const dpp::interaction_create_t& event, const dpp::message& message, const shader& shader, const std::string& texture) {
     event.thinking();
 
     std::cout << "Acquiring render lock..." << std::endl;
@@ -17,11 +17,10 @@ void VulkanBot::do_compute(const dpp::interaction_create_t& event, const dpp::me
         event.edit_response("Error failed to upload shader: "+error);
         return;
     }
-    std::string url = message.author.get_avatar_url();
 
     std::promise<std::string> p;
     std::future<std::string> f = p.get_future();
-    bot.request(url, dpp::http_method::m_get, [&p](const dpp::http_request_completion_t& c)mutable{
+    bot.request(texture, dpp::http_method::m_get, [&p](const dpp::http_request_completion_t& c)mutable{
         p.set_value(c.body);
     });
 

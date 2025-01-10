@@ -139,13 +139,22 @@ namespace vulkanbot {
 				event.reply("Error: No shaders found in message");
 				return;
 			}
+
+			std::string texture = event.get_message().author.get_avatar_url();
+			for(const auto& a : event.get_message().attachments) {
+				if(a.content_type == "image/png") {
+					texture = a.url;
+					break;
+				}
+			}
+
 			if(command_name == "compute") {
 				if(shaders.size() != 1 || shaders[0].type != shader_type::comp) {
 					event.reply("Error: Exactly one compute shader required");
 					return;
 				}
-				std::thread t([this, event, shaders](){
-					do_compute(event, event.get_message(), shaders[0]);
+				std::thread t([this, event, shaders, texture](){
+					do_compute(event, event.get_message(), shaders[0], texture);
 				});
 				t.detach();
 			}
@@ -165,14 +174,14 @@ namespace vulkanbot {
 					}
 				}
 				if(command_name == "render image") {
-					std::thread t([this, event, vert, frag](){
-						do_render(event, event.get_message(), vert, frag);
+					std::thread t([this, event, vert, frag, texture](){
+						do_render(event, event.get_message(), vert, frag, texture);
 					});
 					t.detach();
 				} else if(command_name == "render video") {
 					unsigned long long int id = next_animation_id++;
 					pending_animations[id] = {
-						.vert = vert, .frag = frag, .event = event
+						.vert = vert, .frag = frag, .texture = texture, .event = event
 					};
 					dpp::interaction_modal_response modal(std::to_string(id), "Animation Settings");
 					modal.add_component(dpp::component()
@@ -229,7 +238,7 @@ namespace vulkanbot {
 			animation a{frames, fps, tStart, tEnd, bitrate};
 
 			std::thread t([this, event, data, a](){
-				do_render(event, data.event.get_message(), data.vert, data.frag, a);
+				do_render(event, data.event.get_message(), data.vert, data.frag, data.texture, a);
 			});
 			t.detach();
 	    });
