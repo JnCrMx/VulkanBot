@@ -257,7 +257,7 @@ namespace vulkanbot
 		std::vector<glm::vec2> texCoords;
 		std::vector<glm::vec3> normals;
 		std::vector<uint16_t> indices;
-		generate_grid(10, vertices, texCoords, indices);
+		generate_grid(256, vertices, texCoords, indices);
 		normals.resize(vertices.size());
 		m_gridMesh = uploadMesh(vertices, texCoords, normals, indices);
 
@@ -465,16 +465,15 @@ namespace vulkanbot
 		vk::PipelineRasterizationStateCreateInfo rasterizer({}, false, false, vk::PolygonMode::eFill,
 			cullMode, vk::FrontFace::eCounterClockwise, false, 0.0f, 0.0f, 0.0f, 1.0f);
 		vk::PipelineMultisampleStateCreateInfo multisampling({}, vk::SampleCountFlagBits::e1);
-		vk::PipelineColorBlendAttachmentState colorBlendAttachment(false,
-			vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd,
-			vk::BlendFactor::eZero, vk::BlendFactor::eZero, vk::BlendOp::eAdd,
-			vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA);
-		vk::PipelineColorBlendStateCreateInfo colorBlending({}, false, vk::LogicOp::eNoOp, colorBlendAttachment, {{1.0f, 1.0f, 1.0f, 1.0f}});
+
+		vk::PipelineColorBlendAttachmentState colorBlendAttachment(true, vk::BlendFactor::eOne, vk::BlendFactor::eOne, vk::BlendOp::eAdd, vk::BlendFactor::eSrcAlpha, vk::BlendFactor::eOneMinusSrcAlpha, vk::BlendOp::eAdd);
+		colorBlendAttachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+		vk::PipelineColorBlendStateCreateInfo colorBlend({}, false, vk::LogicOp::eClear, colorBlendAttachment);
 
 		vk::PipelineDepthStencilStateCreateInfo depthStencil({}, depth, depth, vk::CompareOp::eLessOrEqual, false);
 
 		vk::GraphicsPipelineCreateInfo pipelineInfo({}, shaderStages, &vertexInputInfo,
-			&inputAssembly, nullptr, &viewportState, &rasterizer, &multisampling, &depthStencil, &colorBlending, nullptr,
+			&inputAssembly, nullptr, &viewportState, &rasterizer, &multisampling, &depthStencil, &colorBlend, nullptr,
 			m_pipelineLayout.get(), m_renderPass.get());
 
 		vk::Result result;
