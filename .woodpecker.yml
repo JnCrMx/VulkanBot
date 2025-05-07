@@ -1,22 +1,29 @@
+variables:
+  - &buildx_plugin 'docker.io/woodpeckerci/plugin-docker-buildx:5.2.1'
+  - &platforms 'linux/arm64'
+  - &repositories ['git.jcm.re/jcm/vulkanbot', 'ghcr.io/jncrmx/vulkanbot']
+  - publish_logins: &publish_logins
+      - registry: https://git.jcm.re
+        username:
+          from_secret: gitea_package_user
+        password:
+          from_secret: gitea_package_token
+      - registry: https://ghcr.io
+        username:
+          from_secret: ghcr_user
+        password:
+          from_secret: ghcr_token
+
+when:
+  - event: push
+    branch: ${CI_REPO_DEFAULT_BRANCH}
+
 steps:
   docker:
-    image: plugins/kaniko
+    image: *buildx_plugin
     settings:
-      username: jcm
-      password:
-        from_secret: gitea_package_token
-      repo: git.jcm.re/jcm/vulkan_bot
-      registry: git.jcm.re
-      tags: latest
-      snapshot-mode: redo
-    backend_options:
-      kubernetes:
-        resources:
-          requests:
-            memory: 1Gi
-            cpu: 500m
-          limits:
-            memory: 3Gi
-            cpu: 2500m
-        nodeSelector:
-          jcm.re/ci-type: big
+      repo: *repositories
+      dockerfile: Dockerfile
+      platforms: *platforms
+      tag: ["latest", "${CI_COMMIT_SHA}", "${CI_COMMIT_SHA:0:10}"]
+      logins: *publish_logins
