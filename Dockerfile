@@ -1,4 +1,4 @@
-FROM docker.io/ubuntu:noble
+FROM docker.io/ubuntu:plucky
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     curl cmake git clang ninja-build glslang-tools pkg-config \
@@ -20,7 +20,7 @@ RUN /usr/bin/cmake --build /build --config RelWithDebInfo --target all --paralle
 RUN mkdir -p /src/cmake && ln -s /build/_deps/dpp-src/cmake/dpp-config.cmake /src/cmake
 RUN /usr/bin/cmake --install /build --prefix "/install"
 
-FROM docker.io/ubuntu:noble
+FROM docker.io/ubuntu:plucky
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     mesa-vulkan-drivers libavcodec60 libavformat60 libavdevice60 \

@@ -93,7 +93,7 @@ namespace vulkanbot {
 		return std::nullopt;
 	}
 
-	VulkanBot::VulkanBot(const nlohmann::json& config) : bot(config["discord"]["token"]) {
+	VulkanBot::VulkanBot(const nlohmann::json& config) : bot(static_cast<std::string>(config["discord"]["token"])) {
 		m_maxFrames = config["video"]["max"]["frames"];
 
 		bot.on_log(dpp::utility::cout_logger());

@@ -170,8 +170,8 @@ namespace vulkanbot
 			vk::UniquePipeline createComputePipeline(vk::UniqueShaderModule& computeShader);
 
 			vk::UniqueInstance m_instance;
-			vk::DispatchLoaderDynamic m_dispatch;
-			vk::UniqueHandle<vk::DebugUtilsMessengerEXT, vk::DispatchLoaderDynamic> m_debugMessenger;
+			vk::detail::DispatchLoaderDynamic m_dispatch;
+			vk::UniqueHandle<vk::DebugUtilsMessengerEXT, vk::detail::DispatchLoaderDynamic> m_debugMessenger;
 
 			vk::PhysicalDevice m_physicalDevice;
 			vk::UniqueDevice m_device;

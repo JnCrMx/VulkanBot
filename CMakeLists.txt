@@ -36,10 +36,10 @@ endfunction()
 
 FetchContent_Declare(DPP
   GIT_REPOSITORY https://github.com/brainboxdotcc/DPP.git
-  GIT_TAG        v10.0.35
+  GIT_TAG        v10.1.2
   EXCLUDE_FROM_ALL
 )
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz EXCLUDE_FROM_ALL)
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz EXCLUDE_FROM_ALL)
 FetchContent_Declare(avcpp
   GIT_REPOSITORY https://github.com/h4tr3d/avcpp.git
   GIT_TAG        v2.4.0

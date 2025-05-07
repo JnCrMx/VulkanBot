@@ -174,7 +174,7 @@ namespace vulkanbot
 
 		if(validation)
 		{
-			m_dispatch = vk::DispatchLoaderDynamic(m_instance.get(), vkGetInstanceProcAddr);
+			m_dispatch = vk::detail::DispatchLoaderDynamic(m_instance.get(), vkGetInstanceProcAddr);
 			m_debugMessenger = m_instance->createDebugUtilsMessengerEXTUnique(vk::DebugUtilsMessengerCreateInfoEXT({},
 				vk::DebugUtilsMessageSeverityFlagsEXT(debugSeverity), vk::DebugUtilsMessageTypeFlagsEXT(debugType),
 				&debugCallback), nullptr, m_dispatch);
