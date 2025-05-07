@@ -23,7 +23,7 @@ RUN /usr/bin/cmake --install /build --prefix "/install"
 FROM docker.io/ubuntu:plucky
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install --yes \
-    mesa-vulkan-drivers libavcodec60 libavformat60 libavdevice60 \
-    libavfilter9 libavutil58 libswscale7 libswresample4 libpostproc57
+    mesa-vulkan-drivers libavcodec61 libavformat61 libavdevice61 \
+    libavfilter10 libavutil59 libswscale8 libswresample5 libpostproc58
 COPY --from=0 /install /usr
 CMD ["vulkan_bot"]
